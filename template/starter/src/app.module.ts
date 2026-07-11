@@ -1,5 +1,5 @@
 import { Module } from '@green-tea/core';
 import { HomeController } from './controllers/home.controller';
 
-@Module({ controllers: [HomeController] })
+@Module({ mountpoint: '/', controllers: [HomeController] })
 export class AppModule {}
