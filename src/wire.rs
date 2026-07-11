@@ -304,4 +304,17 @@ export class AppModule {}
         // ...and must NOT touch the decoy array
         assert!(out.contains("controllers: [Existing] }"));
     }
+
+    #[test]
+    fn insert_method_reverts_on_parse_break() {
+        // a method body that makes the class re-parse fail must yield None (revert guard)
+        let src = "export class HomeController {\n  home() {}\n}\n";
+        assert!(insert_method(src, "HomeController", "  zen() { ]; class Evil {\n").is_none());
+    }
+
+    #[test]
+    fn insert_method_none_when_class_absent() {
+        let src = "export class HomeController {\n  home() {}\n}\n";
+        assert!(insert_method(src, "NotHere", "  zen() {}\n").is_none());
+    }
 }
