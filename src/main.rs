@@ -1,4 +1,5 @@
 mod cli;
+mod cmd_create;
 mod cmd_new;
 mod cmd_run;
 mod runtime;
@@ -23,7 +24,12 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Command::Create { .. } => eprintln!("create: not yet implemented"),
+        Command::Create { kind, name, check } => {
+            if let Err(e) = cmd_create::run(&kind, &name, check) {
+                eprintln!("error: {e}");
+                std::process::exit(1);
+            }
+        }
         Command::Add { .. } => eprintln!("add: not yet implemented"),
     }
 }
