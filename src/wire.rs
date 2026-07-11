@@ -141,6 +141,51 @@ fn find_array(root: &Node, src: &str, key: &str) -> Option<(usize, usize, String
     None
 }
 
+/// Inserts `method_src` immediately before the closing `}` of `class
+/// <class>`'s body. Returns `None` — leaving the caller's original text
+/// untouched — when the edited text fails to re-parse clean, or when no
+/// `class <class>` is found at all (the splice point can't be located).
+pub fn insert_method(src: &str, class: &str, method_src: &str) -> Option<String> {
+    let tree = parser().parse(src, None).unwrap();
+    let close = find_class_body_close(&tree.root_node(), src, class)?;
+    let mut out = String::with_capacity(src.len() + method_src.len() + 1);
+    out.push_str(&src[..close]);
+    if !src[..close].ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str(method_src);
+    out.push_str(&src[close..]);
+    if parses_clean(&out) {
+        Some(out)
+    } else {
+        None
+    }
+}
+
+/// Finds the byte offset of the closing `}` of `class <class>`'s body,
+/// searching the whole tree in source order (depth-first).
+fn find_class_body_close(root: &Node, src: &str, class: &str) -> Option<usize> {
+    fn visit(node: Node, src: &str, class: &str) -> Option<usize> {
+        if node.kind() == "class_declaration" {
+            if let Some(n) = node.child_by_field_name("name") {
+                if n.utf8_text(src.as_bytes()).ok() == Some(class) {
+                    if let Some(body) = node.child_by_field_name("body") {
+                        return Some(body.end_byte() - 1); // the closing '}'
+                    }
+                }
+            }
+        }
+        let mut c = node.walk();
+        for child in node.children(&mut c) {
+            if let Some(r) = visit(child, src, class) {
+                return Some(r);
+            }
+        }
+        None
+    }
+    visit(*root, src, class)
+}
+
 /// Locates the argument object literal of the first `@Module(...)`
 /// decorator in `src`, in source order. A decorator node is recognized as
 /// `@Module(...)` when its `call_expression` child has a `function` field
@@ -235,6 +280,14 @@ export class AppModule {}
         // once spliced in, so the edited text must fail to re-parse clean.
         let out = add_to_module_array(MOD, "controllers", "X]; class Evil {");
         assert!(out.is_none());
+    }
+
+    #[test]
+    fn method_inserted_before_class_close() {
+        let src = "export class HomeController {\n  home() {}\n}\n";
+        let out = insert_method(src, "HomeController", "  @Sse('/zen')\n  zen() {}\n").unwrap();
+        assert!(out.contains("zen()"));
+        assert!(out.trim_end().ends_with('}'));
     }
 
     #[test]
