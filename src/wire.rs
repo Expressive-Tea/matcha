@@ -109,32 +109,82 @@ pub fn add_to_module_array(src: &str, key: &str, symbol: &str) -> Option<String>
 }
 
 /// Returns `(open_bracket_byte, close_bracket_byte, inner_text)` for the
-/// `key: [...]` pair found anywhere in the tree (first match wins).
+/// `key: [...]` pair found directly inside the first `@Module({...})`
+/// decorator's argument object. Unscoped searches over the whole tree would
+/// risk matching a same-named key in an unrelated object literal (e.g. a
+/// nested `providers:`/`controllers:` array inside `imports: [X.register({
+/// ... })]`, or a decoy object literal elsewhere in the file) — scoping to
+/// the `@Module(...)` object's own pairs avoids that.
 fn find_array(root: &Node, src: &str, key: &str) -> Option<(usize, usize, String)> {
-    fn visit(node: Node, src: &str, key: &str) -> Option<(usize, usize, String)> {
-        if node.kind() == "pair" {
-            if let Some(k) = node.child_by_field_name("key") {
-                if k.utf8_text(src.as_bytes()).ok() == Some(key) {
-                    if let Some(v) = node.child_by_field_name("value") {
-                        if v.kind() == "array" {
-                            let open = v.start_byte();
-                            let close = v.end_byte() - 1; // the ']'
-                            let inner = src[open + 1..close].to_string();
-                            return Some((open, close, inner));
-                        }
-                    }
+    let module_object = find_module_object(root, src)?;
+
+    let mut c = module_object.walk();
+    for child in module_object.named_children(&mut c) {
+        if child.kind() != "pair" {
+            continue;
+        }
+        let Some(k) = child.child_by_field_name("key") else {
+            continue;
+        };
+        if k.utf8_text(src.as_bytes()).ok() != Some(key) {
+            continue;
+        }
+        let Some(v) = child.child_by_field_name("value") else {
+            continue;
+        };
+        if v.kind() != "array" {
+            continue;
+        }
+        let open = v.start_byte();
+        let close = v.end_byte() - 1; // the ']'
+        let inner = src[open + 1..close].to_string();
+        return Some((open, close, inner));
+    }
+    None
+}
+
+/// Locates the argument object literal of the first `@Module(...)`
+/// decorator in `src`, in source order. A decorator node is recognized as
+/// `@Module(...)` when its `call_expression` child has a `function` field
+/// that is an `identifier` with text `"Module"`; the object literal is the
+/// first `object`-kind named child of that call's `arguments` node.
+///
+/// Returns `None` when there is no `@Module(...)` decorator at all, or when
+/// one exists but its argument isn't an object literal.
+fn find_module_object<'a>(root: &Node<'a>, src: &str) -> Option<Node<'a>> {
+    fn find_decorator_call<'a>(node: Node<'a>, src: &str) -> Option<Node<'a>> {
+        if node.kind() == "decorator" {
+            let mut c = node.walk();
+            for child in node.children(&mut c) {
+                if child.kind() != "call_expression" {
+                    continue;
+                }
+                let is_module = child
+                    .child_by_field_name("function")
+                    .filter(|f| f.kind() == "identifier")
+                    .and_then(|f| f.utf8_text(src.as_bytes()).ok())
+                    == Some("Module");
+                if is_module {
+                    return Some(child);
                 }
             }
+            // This decorator isn't `@Module(...)`; keep looking elsewhere.
+            return None;
         }
         let mut c = node.walk();
         for child in node.children(&mut c) {
-            if let Some(r) = visit(child, src, key) {
+            if let Some(r) = find_decorator_call(child, src) {
                 return Some(r);
             }
         }
         None
     }
-    visit(*root, src, key)
+
+    let call = find_decorator_call(*root, src)?;
+    let args = call.child_by_field_name("arguments")?;
+    let mut ac = args.walk();
+    let object = args.named_children(&mut ac).find(|&child| child.kind() == "object");
+    object
 }
 
 #[cfg(test)]
@@ -187,5 +237,20 @@ export class AppModule {}
         // once spliced in, so the edited text must fail to re-parse clean.
         let out = add_to_module_array(MOD, "controllers", "X]; class Evil {");
         assert!(out.is_none());
+    }
+
+    #[test]
+    fn targets_module_array_not_a_decoy_before_it() {
+        // A decoy object literal with a `controllers:` array appears BEFORE the real @Module.
+        let src = r#"const decoy = { controllers: [Existing] };
+
+@Module({ controllers: [HomeController] })
+export class AppModule {}
+"#;
+        let out = add_to_module_array(src, "controllers", "UsersController").unwrap();
+        // must land in the @Module array, next to HomeController...
+        assert!(out.contains("HomeController, UsersController"));
+        // ...and must NOT touch the decoy array
+        assert!(out.contains("controllers: [Existing] }"));
     }
 }
