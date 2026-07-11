@@ -3,6 +3,7 @@ mod cmd_new;
 mod cmd_run;
 mod runtime;
 mod template;
+mod wire;
 
 use clap::Parser;
 use cli::{Cli, Command};
