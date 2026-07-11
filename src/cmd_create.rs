@@ -19,16 +19,16 @@ fn controller_stub(name: &str) -> String {
         lower = name.to_lowercase(), name = name)
 }
 
-pub fn run(kind: &str, name: &str, _check: bool) -> std::io::Result<()> {
+pub fn run(kind: &str, name: &str, check: bool) -> std::io::Result<()> {
     match kind {
-        "controller" => create_controller(name),
+        "controller" => create_controller(name, check),
         "module" | "step" => Err(Error::new(ErrorKind::Unsupported,
             format!("create {kind} not implemented yet"))),
         other => Err(Error::new(ErrorKind::InvalidInput, format!("unknown kind {other}"))),
     }
 }
 
-fn create_controller(name: &str) -> std::io::Result<()> {
+fn create_controller(name: &str, check: bool) -> std::io::Result<()> {
     let file = Path::new("src/controllers")
         .join(format!("{}.controller.ts", name.to_lowercase()));
     std::fs::create_dir_all(file.parent().unwrap())?;
@@ -54,5 +54,14 @@ fn create_controller(name: &str) -> std::io::Result<()> {
             println!("→ could not auto-wire; add {symbol} to controllers[] in src/app.module.ts");
         }
     }
+
+    if check {
+        match crate::check::run(Path::new(".")) {
+            Ok(true) => println!("✓ type-check passed"),
+            Ok(false) => println!("⚠ type-check reported errors"),
+            Err(e) => println!("⚠ could not run type-check: {e}"),
+        }
+    }
+
     Ok(())
 }
