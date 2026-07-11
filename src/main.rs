@@ -1,5 +1,6 @@
 mod cli;
 mod runtime;
+mod template;
 
 use clap::Parser;
 use cli::{Cli, Command};
