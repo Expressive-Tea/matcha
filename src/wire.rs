@@ -30,7 +30,6 @@ fn parser() -> Parser {
 /// True when tree-sitter parses `src` with no `ERROR`/missing node anywhere
 /// in the tree. Used as the revert-on-breakage guarantee: if an edit fails
 /// this check, the caller must discard it.
-#[allow(dead_code)]
 fn parses_clean(src: &str) -> bool {
     let tree = parser().parse(src, None).unwrap();
     !has_error(tree.root_node())
@@ -49,16 +48,60 @@ fn has_error(node: Node) -> bool {
     false
 }
 
-/// Inserts `import { <symbol> } from '<from>';` after the last top-level
-/// import statement. No-op (returns `src` unchanged) if the exact import
-/// line is already present, making repeated calls idempotent.
+/// Wires `symbol` into `src`'s imports from module `from`:
+///
+/// 1. If an `import { ... } from '<from>';` statement already exists, merge
+///    `symbol` into its named-imports brace (`{ A, B } ` → `{ A, B, symbol }`)
+///    instead of appending a second, colliding `import` line for the same
+///    module (a duplicate ESM binding is a hard `SyntaxError`/`TS2300`, not a
+///    harmless dupe). Idempotent: a repeat call with `symbol` already present
+///    in that brace returns `src` unchanged.
+/// 2. Otherwise, appends `import { <symbol> } from '<from>';` after the last
+///    top-level import statement (original behavior, for a module that isn't
+///    imported yet at all).
+///
+/// The brace-merge edit is re-parsed with [`parses_clean`] before being
+/// accepted; if merging somehow produces broken text, this falls back to
+/// appending a fresh import line rather than returning broken source.
 pub fn add_import(src: &str, symbol: &str, from: &str) -> String {
+    let tree = parser().parse(src, None).unwrap();
+    let root = tree.root_node();
+
+    if let Some(named_imports) = find_named_imports(&root, src, from) {
+        let mut c = named_imports.walk();
+        let already_present = named_imports.named_children(&mut c).any(|spec| {
+            spec.kind() == "import_specifier"
+                && spec
+                    .child_by_field_name("name")
+                    .and_then(|n| n.utf8_text(src.as_bytes()).ok())
+                    == Some(symbol)
+        });
+        if already_present {
+            return src.to_string();
+        }
+        let open = named_imports.start_byte();
+        let close = named_imports.end_byte() - 1; // the '}'
+        let inner = src[open + 1..close].trim().trim_end_matches(',').trim_end();
+        let joined = if inner.is_empty() {
+            format!(" {symbol} ")
+        } else {
+            format!(" {inner}, {symbol} ")
+        };
+        let mut out = String::with_capacity(src.len() + symbol.len() + 2);
+        out.push_str(&src[..open + 1]);
+        out.push_str(&joined);
+        out.push_str(&src[close..]);
+        if parses_clean(&out) {
+            return out;
+        }
+        // Merge produced broken text (shouldn't normally happen) — fall
+        // through to the append-a-new-line path below rather than return it.
+    }
+
     let line = format!("import {{ {symbol} }} from '{from}';");
     if src.contains(&line) {
         return src.to_string();
     }
-    let tree = parser().parse(src, None).unwrap();
-    let root = tree.root_node();
     let mut last_end = 0usize;
     let mut c = root.walk();
     for child in root.children(&mut c) {
@@ -75,6 +118,47 @@ pub fn add_import(src: &str, symbol: &str, from: &str) -> String {
     out.push_str(&line);
     out.push_str(&src[last_end..]);
     out
+}
+
+/// Finds the `named_imports` (`{ A, B, C }`) brace of the top-level `import
+/// { ... } from '<from>';` statement whose module specifier string literal
+/// equals `from` exactly. Returns `None` when no import statement has that
+/// source, or when the matching statement has no named-imports clause at all
+/// (e.g. a bare default import) — callers treat that as "can't merge, fall
+/// back to appending a new line".
+fn find_named_imports<'a>(root: &Node<'a>, src: &str, from: &str) -> Option<Node<'a>> {
+    let mut c = root.walk();
+    for stmt in root.children(&mut c) {
+        if stmt.kind() != "import_statement" {
+            continue;
+        }
+        let Some(source) = stmt.child_by_field_name("source") else {
+            continue;
+        };
+        let Ok(raw) = source.utf8_text(src.as_bytes()) else {
+            continue;
+        };
+        let unquoted = raw
+            .strip_prefix(['\'', '"'])
+            .and_then(|s| s.strip_suffix(['\'', '"']))
+            .unwrap_or(raw);
+        if unquoted != from {
+            continue;
+        }
+        let mut sc = stmt.walk();
+        for clause in stmt.children(&mut sc) {
+            if clause.kind() != "import_clause" {
+                continue;
+            }
+            let mut cc = clause.walk();
+            for named in clause.children(&mut cc) {
+                if named.kind() == "named_imports" {
+                    return Some(named);
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Finds the `key: [ ... ]` array inside the first `@Module({...})` and
@@ -226,7 +310,9 @@ fn find_module_object<'a>(root: &Node<'a>, src: &str) -> Option<Node<'a>> {
     let call = find_decorator_call(*root, src)?;
     let args = call.child_by_field_name("arguments")?;
     let mut ac = args.walk();
-    let object = args.named_children(&mut ac).find(|&child| child.kind() == "object");
+    let object = args
+        .named_children(&mut ac)
+        .find(|&child| child.kind() == "object");
     object
 }
 
@@ -264,7 +350,9 @@ export class AppModule {}
         // key missing entirely → our splice can't find it → None, file untouched upstream
         assert!(
             add_to_module_array(MOD, "providers", "X").is_none()
-                || add_to_module_array(MOD, "providers", "X").unwrap().contains("providers")
+                || add_to_module_array(MOD, "providers", "X")
+                    .unwrap()
+                    .contains("providers")
         );
     }
 
@@ -316,5 +404,26 @@ export class AppModule {}
     fn insert_method_none_when_class_absent() {
         let src = "export class HomeController {\n  home() {}\n}\n";
         assert!(insert_method(src, "NotHere", "  zen() {}\n").is_none());
+    }
+
+    #[test]
+    fn add_import_merges_into_existing_brace() {
+        let src = "import { Route, Get, Html, Sse } from '@green-tea/core';\n\nexport class C {}\n";
+        let out = add_import(src, "Stream", "@green-tea/core");
+        assert!(out.contains("Stream"));
+        assert_eq!(out.matches("from '@green-tea/core'").count(), 1); // NO duplicate import line
+    }
+
+    #[test]
+    fn add_import_merge_idempotent_when_symbol_present() {
+        let src = "import { Route, Sse } from '@green-tea/core';\nexport class C {}\n";
+        assert_eq!(add_import(src, "Sse", "@green-tea/core"), src);
+    }
+
+    #[test]
+    fn add_import_new_line_when_module_absent() {
+        let src = "export class C {}\n";
+        let out = add_import(src, "Sse", "@green-tea/core");
+        assert!(out.contains("import { Sse } from '@green-tea/core';"));
     }
 }

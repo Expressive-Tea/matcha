@@ -12,13 +12,18 @@ fn command_for(rt: Runtime) -> (&'static str, Vec<&'static str>) {
 }
 
 pub fn run(dir: &Path) -> std::io::Result<()> {
-    let rt = runtime::detect(dir).ok_or_else(|| Error::new(
-        ErrorKind::NotFound,
-        "no runtime detected (need deno.json, bun.lock, or package.json)",
-    ))?;
+    let rt = runtime::detect(dir).ok_or_else(|| {
+        Error::new(
+            ErrorKind::NotFound,
+            "no runtime detected (need deno.json, bun.lock, or package.json)",
+        )
+    })?;
     let (prog, args) = command_for(rt);
     println!("→ {prog} {}", args.join(" "));
-    let status = std::process::Command::new(prog).args(&args).current_dir(dir).status()?;
+    let status = std::process::Command::new(prog)
+        .args(&args)
+        .current_dir(dir)
+        .status()?;
     std::process::exit(status.code().unwrap_or(1));
 }
 
@@ -33,7 +38,10 @@ mod tests {
     }
     #[test]
     fn bun_watch() {
-        assert_eq!(command_for(Runtime::Bun), ("bun", vec!["--watch", "run", "dev"]));
+        assert_eq!(
+            command_for(Runtime::Bun),
+            ("bun", vec!["--watch", "run", "dev"])
+        );
     }
     #[test]
     fn node_watch() {

@@ -6,8 +6,10 @@ use crate::template;
 pub fn run(name: &str, template_url: Option<&str>) -> std::io::Result<()> {
     let dest = Path::new(name);
     if dest.exists() {
-        return Err(Error::new(ErrorKind::AlreadyExists,
-            format!("'{name}' already exists")));
+        return Err(Error::new(
+            ErrorKind::AlreadyExists,
+            format!("'{name}' already exists"),
+        ));
     }
 
     match template_url {
@@ -46,12 +48,16 @@ mod tests {
     use super::*;
     #[test]
     fn gh_shorthand_expands() {
-        assert_eq!(resolve_url("gh:green-tea/tmpl"),
-                   "https://github.com/green-tea/tmpl");
+        assert_eq!(
+            resolve_url("gh:green-tea/tmpl"),
+            "https://github.com/green-tea/tmpl"
+        );
     }
     #[test]
     fn full_url_passes_through() {
-        assert_eq!(resolve_url("https://example.com/x.git"),
-                   "https://example.com/x.git");
+        assert_eq!(
+            resolve_url("https://example.com/x.git"),
+            "https://example.com/x.git"
+        );
     }
 }

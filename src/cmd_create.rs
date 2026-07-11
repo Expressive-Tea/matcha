@@ -13,24 +13,30 @@ use crate::wire;
 
 fn controller_stub(name: &str) -> String {
     format!(
-"import {{ Route, Get }} from '@green-tea/core';\n\n\
+        "import {{ Route, Get }} from '@green-tea/core';\n\n\
 @Route('/{lower}')\nexport class {name}Controller {{\n  \
 @Get('/')\n  list() {{\n    return [];\n  }}\n}}\n",
-        lower = name.to_lowercase(), name = name)
+        lower = name.to_lowercase(),
+        name = name
+    )
 }
 
 pub fn run(kind: &str, name: &str, check: bool) -> std::io::Result<()> {
     match kind {
         "controller" => create_controller(name, check),
-        "module" | "step" => Err(Error::new(ErrorKind::Unsupported,
-            format!("create {kind} not implemented yet"))),
-        other => Err(Error::new(ErrorKind::InvalidInput, format!("unknown kind {other}"))),
+        "module" | "step" => Err(Error::new(
+            ErrorKind::Unsupported,
+            format!("create {kind} not implemented yet"),
+        )),
+        other => Err(Error::new(
+            ErrorKind::InvalidInput,
+            format!("unknown kind {other}"),
+        )),
     }
 }
 
 fn create_controller(name: &str, check: bool) -> std::io::Result<()> {
-    let file = Path::new("src/controllers")
-        .join(format!("{}.controller.ts", name.to_lowercase()));
+    let file = Path::new("src/controllers").join(format!("{}.controller.ts", name.to_lowercase()));
     std::fs::create_dir_all(file.parent().unwrap())?;
     std::fs::write(&file, controller_stub(name))?;
     println!("✓ {}", file.display());
