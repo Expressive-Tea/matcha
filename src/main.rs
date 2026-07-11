@@ -1,5 +1,6 @@
 mod cli;
 mod cmd_new;
+mod cmd_run;
 mod runtime;
 mod template;
 
@@ -15,7 +16,12 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Command::Run => eprintln!("run: not yet implemented"),
+        Command::Run => {
+            if let Err(e) = cmd_run::run(std::path::Path::new(".")) {
+                eprintln!("error: {e}");
+                std::process::exit(1);
+            }
+        }
         Command::Create { .. } => eprintln!("create: not yet implemented"),
         Command::Add { .. } => eprintln!("add: not yet implemented"),
     }
