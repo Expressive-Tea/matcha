@@ -20,3 +20,12 @@ fn new_refuses_existing_dir() {
         .current_dir(d.path())
         .args(["new", "taken"]).assert().failure();
 }
+
+#[test]
+fn new_with_template_url_stub_leaves_no_dir() {
+    let d = tempdir().unwrap();
+    Command::cargo_bin("matcha").unwrap()
+        .current_dir(d.path())
+        .args(["new", "demo", "--template-url", "gh:x/y"]).assert().failure();
+    assert!(!d.path().join("demo").exists());
+}

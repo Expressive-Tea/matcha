@@ -9,10 +9,12 @@ pub fn run(name: &str, template_url: Option<&str>) -> std::io::Result<()> {
         return Err(Error::new(ErrorKind::AlreadyExists,
             format!("'{name}' already exists")));
     }
-    std::fs::create_dir_all(dest)?;
 
     match template_url {
-        None => template::write_starter(dest, name)?,
+        None => {
+            std::fs::create_dir_all(dest)?;
+            template::write_starter(dest, name)?;
+        }
         Some(_) => return Err(Error::new(ErrorKind::Unsupported,
             "--template-url not implemented yet")),
     }

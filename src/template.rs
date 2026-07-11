@@ -3,7 +3,6 @@ use std::path::Path;
 
 pub static STARTER: Dir = include_dir!("$CARGO_MANIFEST_DIR/template/starter");
 
-#[allow(dead_code)]
 pub fn write_starter(dest: &Path, project_name: &str) -> std::io::Result<()> {
     write_dir(&STARTER, dest, project_name)
 }
