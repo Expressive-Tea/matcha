@@ -45,5 +45,8 @@ mod tests {
         assert!(!html.contains("{{project_name}}"));
         assert!(d.path().join("src/controllers/home.controller.ts").exists());
         assert!(d.path().join("matcha.toml").exists());
+        assert!(d.path().join("src/main.ts").exists());
+        let module = std::fs::read_to_string(d.path().join("src/app.module.ts")).unwrap();
+        assert!(module.contains("mountpoint"));
     }
 }
