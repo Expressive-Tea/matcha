@@ -1,5 +1,6 @@
 mod check;
 mod cli;
+mod cmd_add;
 mod cmd_create;
 mod cmd_new;
 mod cmd_run;
@@ -31,6 +32,11 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Command::Add { .. } => eprintln!("add: not yet implemented"),
+        Command::Add { capability } => {
+            if let Err(e) = cmd_add::run(&capability) {
+                eprintln!("error: {e}");
+                std::process::exit(1);
+            }
+        }
     }
 }
