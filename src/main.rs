@@ -1,3 +1,4 @@
+mod check;
 mod cli;
 mod cmd_create;
 mod cmd_new;
