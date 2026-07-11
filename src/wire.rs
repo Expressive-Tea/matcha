@@ -52,7 +52,6 @@ fn has_error(node: Node) -> bool {
 /// Inserts `import { <symbol> } from '<from>';` after the last top-level
 /// import statement. No-op (returns `src` unchanged) if the exact import
 /// line is already present, making repeated calls idempotent.
-#[allow(dead_code)]
 pub fn add_import(src: &str, symbol: &str, from: &str) -> String {
     let line = format!("import {{ {symbol} }} from '{from}';");
     if src.contains(&line) {
@@ -84,7 +83,6 @@ pub fn add_import(src: &str, symbol: &str, from: &str) -> String {
 /// original text untouched — when the edited text fails to re-parse clean
 /// (an `ERROR`/missing node appears), which is also what happens when `key`
 /// doesn't exist in the module object at all (the splice can't be located).
-#[allow(dead_code)]
 pub fn add_to_module_array(src: &str, key: &str, symbol: &str) -> Option<String> {
     let tree = parser().parse(src, None).unwrap();
     let (open, close, existing) = find_array(&tree.root_node(), src, key)?;
