@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{project_name}}</title>
+    <style>
+      body { font-family: system-ui; display: grid; place-items: center;
+             min-height: 100vh; margin: 0; background: #0f1f13; color: #d7f5df; }
+      .logo { font-size: 4rem; }
+      .zen { margin-top: 1rem; opacity: .85; font-style: italic; }
+    </style>
+  </head>
+  <body>
+    <div>
+      <div class="logo">🍵 green-tea</div>
+      <div class="zen" id="zen">connecting…</div>
+    </div>
+    <script>
+      const es = new EventSource('/zen');
+      es.onmessage = (e) => { document.getElementById('zen').textContent = JSON.parse(e.data).zen; };
+    </script>
+  </body>
+</html>
