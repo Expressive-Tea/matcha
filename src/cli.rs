@@ -14,6 +14,8 @@ pub enum Command {
         name: String,
         #[arg(long)]
         template_url: Option<String>,
+        #[arg(long, default_value = "deno", value_parser = ["node", "deno", "bun"])]
+        runtime: String,
     },
     /// Detect the runtime and run the project in watch mode
     Run,

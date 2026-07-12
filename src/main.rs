@@ -14,8 +14,12 @@ use cli::{Cli, Command};
 fn main() {
     let cli = Cli::parse();
     match cli.command {
-        Command::New { name, template_url } => {
-            if let Err(e) = cmd_new::run(&name, template_url.as_deref()) {
+        Command::New {
+            name,
+            template_url,
+            runtime,
+        } => {
+            if let Err(e) = cmd_new::run(&name, template_url.as_deref(), &runtime) {
                 eprintln!("error: {e}");
                 std::process::exit(1);
             }
