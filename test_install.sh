@@ -21,7 +21,11 @@ mkdir -p "$assetdir"
 printf '#!/bin/sh\necho "matcha 0.0.0-test"\n' > "$work/matcha"
 chmod +x "$work/matcha"
 tar -czf "$assetdir/matcha-$triple.tar.gz" -C "$work" matcha
-( cd "$assetdir" && { command -v sha256sum >/dev/null 2>&1 && sha256sum "matcha-$triple.tar.gz" || shasum -a 256 "matcha-$triple.tar.gz"; } > "matcha-$triple.tar.gz.sha256" )
+if command -v sha256sum >/dev/null 2>&1; then
+  ( cd "$assetdir" && sha256sum "matcha-$triple.tar.gz" > "matcha-$triple.tar.gz.sha256" )
+else
+  ( cd "$assetdir" && shasum -a 256 "matcha-$triple.tar.gz" > "matcha-$triple.tar.gz.sha256" )
+fi
 
 # --- case 1: happy path installs the binary ---
 bin="$work/bin"
