@@ -1,9 +1,10 @@
 use std::io::{Error, ErrorKind};
 use std::path::Path;
 
+use crate::runtime::Runtime;
 use crate::template;
 
-pub fn run(name: &str, template_url: Option<&str>) -> std::io::Result<()> {
+pub fn run(name: &str, template_url: Option<&str>, runtime: &str) -> std::io::Result<()> {
     let dest = Path::new(name);
     if dest.exists() {
         return Err(Error::new(
@@ -14,8 +15,14 @@ pub fn run(name: &str, template_url: Option<&str>) -> std::io::Result<()> {
 
     match template_url {
         None => {
+            let rt = Runtime::from_str(runtime).ok_or_else(|| {
+                Error::new(
+                    ErrorKind::InvalidInput,
+                    format!("unknown runtime '{runtime}'"),
+                )
+            })?;
             std::fs::create_dir_all(dest)?;
-            template::write_starter(dest, name)?;
+            template::write_starter(dest, name, rt)?;
         }
         Some(url) => clone_template(url, dest)?,
     }
