@@ -1,6 +1,5 @@
 use std::path::Path;
 
-#[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Runtime {
     Node,
@@ -9,7 +8,6 @@ pub enum Runtime {
 }
 
 impl Runtime {
-    #[allow(dead_code)]
     pub fn from_str(s: &str) -> Option<Runtime> {
         match s.trim() {
             "node" => Some(Runtime::Node),
@@ -20,13 +18,11 @@ impl Runtime {
     }
 }
 
-#[allow(dead_code)]
 fn exists(dir: &Path, name: &str) -> bool {
     dir.join(name).exists()
 }
 
 /// Reads `runtime = "..."` from matcha.toml without a TOML dep (one field only).
-#[allow(dead_code)]
 fn override_from_toml(dir: &Path) -> Option<Runtime> {
     let text = std::fs::read_to_string(dir.join("matcha.toml")).ok()?;
     for line in text.lines() {
@@ -39,7 +35,6 @@ fn override_from_toml(dir: &Path) -> Option<Runtime> {
     None
 }
 
-#[allow(dead_code)]
 pub fn detect(dir: &Path) -> Option<Runtime> {
     if let Some(r) = override_from_toml(dir) {
         return Some(r);

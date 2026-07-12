@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-12
 **Branch:** `feature/matcha-multi-runtime` (off `develop`)
-**Goal:** `matcha new <name> --runtime <node|deno|bun>` scaffolds the starter for the chosen runtime. Shared app files are written once; only `main.ts` + runtime config + `matcha.toml` differ per runtime. Default runtime: **deno**.
+**Goal:** `matcha new <name> --runtime <node|deno|bun>` scaffolds the starter for the chosen runtime. Shared app files are written once; only `main.ts` + runtime config + `matcha.toml` differ per runtime. Default runtime: **node** (green-tea is developed node-first; Node is the reference implementation. deno/bun via `--runtime`).
 
 ## Verified framework facts (from Green-Tea/core)
 - `@green-tea/core` imports `reflect-metadata` internally (`src/index.ts:6`) — consumers need NO explicit import; it installs transitively with the package.
