@@ -48,7 +48,7 @@ esac
 version="${MATCHA_VERSION:-latest}"
 if [ "$version" = "latest" ]; then
   tag=$(fetch "$REPO_BASE/api/v1/repos/Green-Tea/matcha/releases/latest" \
-        | grep -o '"tag_name":"[^"]*"' | head -1 | cut -d'"' -f4)
+        | grep -o '"tag_name":[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
   [ -n "$tag" ] || err "could not resolve latest release tag"
 else
   tag="$version"
