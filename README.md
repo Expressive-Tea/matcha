@@ -5,7 +5,20 @@ The [green-tea](https://git.svc.zoit.services/Green-Tea/core) CLI — scaffold, 
 ## Install
 
 ```bash
-cargo install matcha        # or: brew install matcha (once published)
+curl -fsSL https://git.svc.zoit.services/Green-Tea/matcha/raw/branch/main/install.sh | sh
+```
+
+Installs a prebuilt binary to `~/.local/bin` — no Rust required. Env vars go on
+the `sh` side of the pipe:
+
+```bash
+curl -fsSL …/install.sh | MATCHA_VERSION=v26.7.0 MATCHA_INSTALL_DIR=/usr/local/bin sh
+```
+
+**From source** (requires Rust — compiles and installs):
+
+```bash
+cargo install --git https://git.svc.zoit.services/Green-Tea/matcha
 ```
 
 ## Usage
