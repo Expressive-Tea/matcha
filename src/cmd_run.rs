@@ -6,7 +6,7 @@ use crate::runtime::{self, Runtime};
 fn command_for(rt: Runtime) -> (&'static str, Vec<&'static str>) {
     match rt {
         Runtime::Deno => ("deno", vec!["task", "dev"]),
-        Runtime::Bun => ("bun", vec!["--watch", "run", "dev"]),
+        Runtime::Bun => ("bun", vec!["run", "dev"]),
         Runtime::Node => ("npm", vec!["run", "dev"]),
     }
 }
@@ -38,10 +38,7 @@ mod tests {
     }
     #[test]
     fn bun_watch() {
-        assert_eq!(
-            command_for(Runtime::Bun),
-            ("bun", vec!["--watch", "run", "dev"])
-        );
+        assert_eq!(command_for(Runtime::Bun), ("bun", vec!["run", "dev"]));
     }
     #[test]
     fn node_watch() {
