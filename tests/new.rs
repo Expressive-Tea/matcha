@@ -1,0 +1,131 @@
+use assert_cmd::Command;
+use std::process::Command as Proc;
+use tempfile::tempdir;
+
+#[test]
+fn new_scaffolds_into_named_dir() {
+    let d = tempdir().unwrap();
+    Command::cargo_bin("matcha")
+        .unwrap()
+        .current_dir(d.path())
+        .args(["new", "my-api"])
+        .assert()
+        .success();
+    let root = d.path().join("my-api");
+    assert!(root.join("src/app.module.ts").exists());
+    assert!(root.join("public/index.html").exists());
+}
+
+#[test]
+fn new_default_runtime_is_node() {
+    let d = tempdir().unwrap();
+    Command::cargo_bin("matcha")
+        .unwrap()
+        .current_dir(d.path())
+        .args(["new", "demo"])
+        .assert()
+        .success();
+    let root = d.path().join("demo");
+    let pkg = std::fs::read_to_string(root.join("package.json")).unwrap();
+    assert!(pkg.contains("\"name\": \"demo\""));
+    assert!(root.join("tsconfig.json").exists());
+    assert!(!root.join("deno.json").exists());
+}
+
+#[test]
+fn new_with_deno_runtime_produces_deno_json() {
+    let d = tempdir().unwrap();
+    Command::cargo_bin("matcha")
+        .unwrap()
+        .current_dir(d.path())
+        .args(["new", "demo-deno", "--runtime", "deno"])
+        .assert()
+        .success();
+    let root = d.path().join("demo-deno");
+    assert!(root.join("deno.json").exists());
+    assert!(!root.join("package.json").exists());
+}
+
+#[test]
+fn new_with_node_runtime_produces_package_json() {
+    let d = tempdir().unwrap();
+    Command::cargo_bin("matcha")
+        .unwrap()
+        .current_dir(d.path())
+        .args(["new", "demo", "--runtime", "node"])
+        .assert()
+        .success();
+    let root = d.path().join("demo");
+    let pkg = std::fs::read_to_string(root.join("package.json")).unwrap();
+    assert!(pkg.contains("\"name\": \"demo\""));
+    assert!(!root.join("deno.json").exists());
+}
+
+#[test]
+fn new_with_bun_runtime_produces_package_json() {
+    let d = tempdir().unwrap();
+    Command::cargo_bin("matcha")
+        .unwrap()
+        .current_dir(d.path())
+        .args(["new", "demo-bun", "--runtime", "bun"])
+        .assert()
+        .success();
+    let root = d.path().join("demo-bun");
+    let pkg = std::fs::read_to_string(root.join("package.json")).unwrap();
+    assert!(pkg.contains("\"name\": \"demo-bun\""));
+    assert!(!root.join("deno.json").exists());
+}
+
+#[test]
+fn new_refuses_existing_dir() {
+    let d = tempdir().unwrap();
+    std::fs::create_dir(d.path().join("taken")).unwrap();
+    Command::cargo_bin("matcha")
+        .unwrap()
+        .current_dir(d.path())
+        .args(["new", "taken"])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn new_clones_local_template() {
+    let d = tempdir().unwrap();
+    // build a bare-ish source repo to clone
+    let src = d.path().join("src-tmpl");
+    std::fs::create_dir_all(src.join("public")).unwrap();
+    std::fs::write(src.join("public/marker.txt"), "hi").unwrap();
+    Proc::new("git")
+        .args(["init", "-q"])
+        .current_dir(&src)
+        .status()
+        .unwrap();
+    Proc::new("git")
+        .args(["add", "."])
+        .current_dir(&src)
+        .status()
+        .unwrap();
+    Proc::new("git")
+        .args([
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "user.name=t",
+            "commit",
+            "-qm",
+            "init",
+        ])
+        .current_dir(&src)
+        .status()
+        .unwrap();
+
+    let url = format!("file://{}", src.display());
+    Command::cargo_bin("matcha")
+        .unwrap()
+        .current_dir(d.path())
+        .args(["new", "cloned", "--template-url", &url])
+        .assert()
+        .success();
+    assert!(d.path().join("cloned/public/marker.txt").exists());
+    assert!(!d.path().join("cloned/.git").exists()); // .git stripped
+}

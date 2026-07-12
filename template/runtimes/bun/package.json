@@ -1,0 +1,7 @@
+{
+  "name": "{{project_name}}",
+  "type": "module",
+  "private": true,
+  "scripts": { "dev": "bun --watch run src/main.ts" },
+  "dependencies": { "@green-tea/core": "^26.7.0-beta.0" }
+}
