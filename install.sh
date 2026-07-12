@@ -6,6 +6,9 @@
 set -eu
 
 REPO_BASE="${MATCHA_REPO_BASE:-https://git.svc.zoit.services/Green-Tea/matcha}"
+# The API lives at the host root (/api/v1/...), NOT under the repo path. Keep it
+# separate from REPO_BASE (which is used for release DOWNLOAD urls under the repo).
+API_BASE="${MATCHA_API_BASE:-https://git.svc.zoit.services/api/v1/repos/Green-Tea/matcha}"
 INSTALL_DIR="${MATCHA_INSTALL_DIR:-$HOME/.local/bin}"
 
 err() { echo "matcha-install: $*" >&2; exit 1; }
@@ -47,7 +50,7 @@ esac
 
 version="${MATCHA_VERSION:-latest}"
 if [ "$version" = "latest" ]; then
-  tag=$(fetch "$REPO_BASE/api/v1/repos/Green-Tea/matcha/releases/latest" \
+  tag=$(fetch "$API_BASE/releases/latest" \
         | grep -o '"tag_name":[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
   [ -n "$tag" ] || err "could not resolve latest release tag"
 else
