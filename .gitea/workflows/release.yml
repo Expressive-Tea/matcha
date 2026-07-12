@@ -7,7 +7,31 @@ permissions:
   contents: write
 
 jobs:
+  # Gitea's delete-asset API differs from GitHub's (it requires the release id in the
+  # path), so softprops' delete-then-reupload 404s when re-releasing an existing tag.
+  # Delete the whole release first so every run's uploads are fresh. Portable: the
+  # get-by-tag + delete-by-id endpoints exist on both Gitea and GitHub, and deleting
+  # first is harmless on GitHub (softprops just recreates it).
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete existing release for this tag
+        env:
+          GT_TOKEN: ${{ github.token }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          api="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY"
+          id=$(curl -sSL -H "Authorization: token $GT_TOKEN" "$api/releases/tags/$tag" \
+               | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2 || true)
+          if [ -n "${id:-}" ]; then
+            echo "deleting existing release id=$id for $tag"
+            curl -sS -X DELETE -H "Authorization: token $GT_TOKEN" "$api/releases/$id" || true
+          else
+            echo "no existing release for $tag — nothing to delete"
+          fi
+
   build:
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
