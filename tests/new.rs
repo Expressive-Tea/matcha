@@ -17,6 +17,66 @@ fn new_scaffolds_into_named_dir() {
 }
 
 #[test]
+fn new_default_runtime_is_node() {
+    let d = tempdir().unwrap();
+    Command::cargo_bin("matcha")
+        .unwrap()
+        .current_dir(d.path())
+        .args(["new", "demo"])
+        .assert()
+        .success();
+    let root = d.path().join("demo");
+    let pkg = std::fs::read_to_string(root.join("package.json")).unwrap();
+    assert!(pkg.contains("\"name\": \"demo\""));
+    assert!(root.join("tsconfig.json").exists());
+    assert!(!root.join("deno.json").exists());
+}
+
+#[test]
+fn new_with_deno_runtime_produces_deno_json() {
+    let d = tempdir().unwrap();
+    Command::cargo_bin("matcha")
+        .unwrap()
+        .current_dir(d.path())
+        .args(["new", "demo-deno", "--runtime", "deno"])
+        .assert()
+        .success();
+    let root = d.path().join("demo-deno");
+    assert!(root.join("deno.json").exists());
+    assert!(!root.join("package.json").exists());
+}
+
+#[test]
+fn new_with_node_runtime_produces_package_json() {
+    let d = tempdir().unwrap();
+    Command::cargo_bin("matcha")
+        .unwrap()
+        .current_dir(d.path())
+        .args(["new", "demo", "--runtime", "node"])
+        .assert()
+        .success();
+    let root = d.path().join("demo");
+    let pkg = std::fs::read_to_string(root.join("package.json")).unwrap();
+    assert!(pkg.contains("\"name\": \"demo\""));
+    assert!(!root.join("deno.json").exists());
+}
+
+#[test]
+fn new_with_bun_runtime_produces_package_json() {
+    let d = tempdir().unwrap();
+    Command::cargo_bin("matcha")
+        .unwrap()
+        .current_dir(d.path())
+        .args(["new", "demo-bun", "--runtime", "bun"])
+        .assert()
+        .success();
+    let root = d.path().join("demo-bun");
+    let pkg = std::fs::read_to_string(root.join("package.json")).unwrap();
+    assert!(pkg.contains("\"name\": \"demo-bun\""));
+    assert!(!root.join("deno.json").exists());
+}
+
+#[test]
 fn new_refuses_existing_dir() {
     let d = tempdir().unwrap();
     std::fs::create_dir(d.path().join("taken")).unwrap();
