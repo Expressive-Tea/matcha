@@ -1,0 +1,19 @@
+[package]
+name = "matcha"
+version = "26.7.0"
+edition = "2021"
+
+[[bin]]
+name = "matcha"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+include_dir = "0.7"
+tree-sitter = "0.22"
+tree-sitter-typescript = "0.21"
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+tempfile = "3"
