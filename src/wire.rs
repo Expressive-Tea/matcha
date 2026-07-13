@@ -162,27 +162,69 @@ fn find_named_imports<'a>(root: &Node<'a>, src: &str, from: &str) -> Option<Node
 }
 
 /// Finds the `key: [ ... ]` array inside the first `@Module({...})` and
-/// inserts `symbol` into it. Idempotent: a repeat call that would insert an
-/// already-present symbol is a no-op. Returns `None` — leaving the caller's
-/// original text untouched — when the edited text fails to re-parse clean
-/// (an `ERROR`/missing node appears), which is also what happens when `key`
-/// doesn't exist in the module object at all (the splice can't be located).
+/// inserts `symbol` into it, creating `key: [symbol]` inside the module
+/// object when that key is absent entirely. Idempotent: a repeat call that
+/// would insert an already-present symbol is a no-op. Returns `None` —
+/// leaving the caller's original text untouched — when the edited text fails
+/// to re-parse clean (an `ERROR`/missing node appears), or when there is no
+/// `@Module(...)` object to target at all.
 pub fn add_to_module_array(src: &str, key: &str, symbol: &str) -> Option<String> {
     let tree = parser().parse(src, None).unwrap();
-    let (open, close, existing) = find_array(&tree.root_node(), src, key)?;
-    if existing.split(',').map(str::trim).any(|s| s == symbol) {
-        return Some(src.to_string()); // idempotent
+    let root = tree.root_node();
+    let object = find_module_object(&root, src)?;
+    insert_into_object_array(src, object, key, symbol)
+}
+
+/// Inserts `symbol` into the `modules` array of the first `createApp(...)`
+/// call's argument object (creating the `modules` key if absent). Idempotent;
+/// reverts (returns `None`) on parse breakage or when no `createApp(...)` call
+/// with an object argument is found.
+// Not yet called outside this module's tests — the `matcha create module`
+// generator that wires it in lands in the next task.
+#[allow(dead_code)]
+pub fn add_to_createapp_modules(src: &str, symbol: &str) -> Option<String> {
+    let tree = parser().parse(src, None).unwrap();
+    let root = tree.root_node();
+    let object = find_createapp_object(&root, src)?;
+    insert_into_object_array(src, object, "modules", symbol)
+}
+
+/// Inserts `symbol` into the `key: [...]` array directly inside `object`
+/// (an object-literal node). If that `key` pair is absent, a new
+/// `key: [symbol]` pair is inserted into the object. Idempotent; re-parses and
+/// returns `None` on breakage.
+fn insert_into_object_array(src: &str, object: Node, key: &str, symbol: &str) -> Option<String> {
+    if let Some((open, close)) = find_key_array_span(object, src, key) {
+        let inner = &src[open + 1..close];
+        if inner.split(',').map(str::trim).any(|s| s == symbol) {
+            return Some(src.to_string()); // idempotent
+        }
+        let joined = if inner.trim().is_empty() {
+            symbol.to_string()
+        } else {
+            format!("{}, {}", inner.trim_end().trim_end_matches(','), symbol)
+        };
+        let mut out = String::with_capacity(src.len() + symbol.len() + 2);
+        out.push_str(&src[..open + 1]);
+        out.push_str(&joined);
+        out.push_str(&src[close..]);
+        return if parses_clean(&out) { Some(out) } else { None };
     }
-    let inner = &src[open + 1..close]; // between [ ]
-    let joined = if inner.trim().is_empty() {
-        symbol.to_string()
+
+    // key absent → create `key: [symbol]` inside the object, before its '}'
+    let obj_open = object.start_byte();
+    let obj_close = object.end_byte() - 1; // the '}'
+    let existing = src[obj_open + 1..obj_close].trim();
+    let pair = format!("{key}: [{symbol}]");
+    let new_inner = if existing.is_empty() {
+        format!(" {pair} ")
     } else {
-        format!("{}, {}", inner.trim_end().trim_end_matches(','), symbol)
+        format!(" {}, {pair} ", existing.trim_end_matches(','))
     };
-    let mut out = String::with_capacity(src.len() + symbol.len() + 2);
-    out.push_str(&src[..open + 1]);
-    out.push_str(&joined);
-    out.push_str(&src[close..]);
+    let mut out = String::with_capacity(src.len() + pair.len() + 4);
+    out.push_str(&src[..obj_open + 1]);
+    out.push_str(&new_inner);
+    out.push_str(&src[obj_close..]);
     if parses_clean(&out) {
         Some(out)
     } else {
@@ -190,18 +232,11 @@ pub fn add_to_module_array(src: &str, key: &str, symbol: &str) -> Option<String>
     }
 }
 
-/// Returns `(open_bracket_byte, close_bracket_byte, inner_text)` for the
-/// `key: [...]` pair found directly inside the first `@Module({...})`
-/// decorator's argument object. Unscoped searches over the whole tree would
-/// risk matching a same-named key in an unrelated object literal (e.g. a
-/// nested `providers:`/`controllers:` array inside `imports: [X.register({
-/// ... })]`, or a decoy object literal elsewhere in the file) — scoping to
-/// the `@Module(...)` object's own pairs avoids that.
-fn find_array(root: &Node, src: &str, key: &str) -> Option<(usize, usize, String)> {
-    let module_object = find_module_object(root, src)?;
-
-    let mut c = module_object.walk();
-    for child in module_object.named_children(&mut c) {
+/// Returns `(open_bracket_byte, close_bracket_byte)` of the `key: [...]` array
+/// among `object`'s direct `pair` children, or `None` if absent.
+fn find_key_array_span(object: Node, src: &str, key: &str) -> Option<(usize, usize)> {
+    let mut c = object.walk();
+    for child in object.named_children(&mut c) {
         if child.kind() != "pair" {
             continue;
         }
@@ -217,12 +252,41 @@ fn find_array(root: &Node, src: &str, key: &str) -> Option<(usize, usize, String
         if v.kind() != "array" {
             continue;
         }
-        let open = v.start_byte();
-        let close = v.end_byte() - 1; // the ']'
-        let inner = src[open + 1..close].to_string();
-        return Some((open, close, inner));
+        return Some((v.start_byte(), v.end_byte() - 1));
     }
     None
+}
+
+/// Locates the argument object literal of the first `createApp(...)` call
+/// expression (function identifier `createApp`), in source order.
+fn find_createapp_object<'a>(root: &Node<'a>, src: &str) -> Option<Node<'a>> {
+    fn visit<'a>(node: Node<'a>, src: &str) -> Option<Node<'a>> {
+        if node.kind() == "call_expression" {
+            let is_createapp = node
+                .child_by_field_name("function")
+                .filter(|f| f.kind() == "identifier")
+                .and_then(|f| f.utf8_text(src.as_bytes()).ok())
+                == Some("createApp");
+            if is_createapp {
+                if let Some(args) = node.child_by_field_name("arguments") {
+                    let mut ac = args.walk();
+                    for child in args.named_children(&mut ac) {
+                        if child.kind() == "object" {
+                            return Some(child);
+                        }
+                    }
+                }
+            }
+        }
+        let mut c = node.walk();
+        for child in node.children(&mut c) {
+            if let Some(r) = visit(child, src) {
+                return Some(r);
+            }
+        }
+        None
+    }
+    visit(*root, src)
 }
 
 /// Inserts `method_src` immediately before the closing `}` of `class
@@ -347,7 +411,11 @@ export class AppModule {}
 
     #[test]
     fn broken_result_is_rejected() {
-        // key missing entirely → our splice can't find it → None, file untouched upstream
+        // Predates create-if-absent: `providers` used to be missing entirely,
+        // so the old `find_array` couldn't locate it → None. Now the key is
+        // created instead, so either outcome is accepted here; the dedicated
+        // `creates_providers_key_and_reverts_on_break` test above covers the
+        // create-if-absent behavior explicitly.
         assert!(
             add_to_module_array(MOD, "providers", "X").is_none()
                 || add_to_module_array(MOD, "providers", "X")
@@ -356,12 +424,11 @@ export class AppModule {}
         );
     }
 
-    /// Extra coverage beyond the brief: `broken_result_is_rejected` above only
-    /// exercises the "key not found" `None` path (via `find_array`). This
-    /// exercises the *other* `None` path — a splice that finds the array but
-    /// produces text that no longer parses clean — proving the revert-on-ERROR
-    /// guarantee (`parses_clean` check in `add_to_module_array`) is real, not
-    /// just theoretically reachable.
+    /// Extra coverage beyond the brief: this exercises the `None` path where
+    /// `insert_into_object_array` finds (or creates) the target but the
+    /// splice produces text that no longer parses clean — proving the
+    /// revert-on-ERROR guarantee (`parses_clean` check) is real, not just
+    /// theoretically reachable.
     #[test]
     fn revert_on_actual_parse_error() {
         // A "symbol" containing stray syntax breaks the array/object/class
@@ -425,5 +492,43 @@ export class AppModule {}
         let src = "export class C {}\n";
         let out = add_import(src, "Sse", "@green-tea/core");
         assert!(out.contains("import { Sse } from '@green-tea/core';"));
+    }
+
+    #[test]
+    fn creates_steps_key_when_absent() {
+        // MOD has only `controllers` — adding a step must CREATE `steps: [...]`
+        let out = add_to_module_array(MOD, "steps", "PasitoStep").unwrap();
+        assert!(out.contains("steps: [PasitoStep]"));
+        assert!(out.contains("controllers: [HomeController]")); // untouched
+                                                                // idempotent
+        assert_eq!(
+            add_to_module_array(&out, "steps", "PasitoStep").unwrap(),
+            out
+        );
+    }
+
+    #[test]
+    fn creates_providers_key_and_reverts_on_break() {
+        let out = add_to_module_array(MOD, "providers", "ConfigProvider").unwrap();
+        assert!(out.contains("providers: [ConfigProvider]"));
+        // a symbol with stray syntax must still be rejected (revert guard)
+        assert!(add_to_module_array(MOD, "providers", "X]; class Evil {").is_none());
+    }
+
+    const MAIN: &str = "import { createApp } from '@green-tea/core';\nimport { AppModule } from './app.module';\n\nconst app = createApp({ modules: [AppModule] });\n";
+
+    #[test]
+    fn adds_module_to_createapp() {
+        let out = add_to_createapp_modules(MAIN, "UsersModule").unwrap();
+        assert!(out.contains("AppModule, UsersModule"));
+        assert_eq!(add_to_createapp_modules(&out, "UsersModule").unwrap(), out);
+        // idempotent
+    }
+
+    #[test]
+    fn createapp_creates_modules_key_when_absent() {
+        let src = "const app = createApp({});\n";
+        let out = add_to_createapp_modules(src, "AppModule").unwrap();
+        assert!(out.contains("modules: [AppModule]"));
     }
 }
