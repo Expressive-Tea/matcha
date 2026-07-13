@@ -21,7 +21,7 @@ pub enum Command {
     Run,
     /// Generate a piece and auto-wire it into the module
     Create {
-        #[arg(value_parser = ["module", "controller", "step"])]
+        #[arg(value_parser = ["module", "controller", "step", "provider"])]
         kind: String,
         name: String,
         #[arg(long)]
