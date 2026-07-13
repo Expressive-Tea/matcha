@@ -179,9 +179,6 @@ pub fn add_to_module_array(src: &str, key: &str, symbol: &str) -> Option<String>
 /// call's argument object (creating the `modules` key if absent). Idempotent;
 /// reverts (returns `None`) on parse breakage or when no `createApp(...)` call
 /// with an object argument is found.
-// Not yet called outside this module's tests — the `matcha create module`
-// generator that wires it in lands in the next task.
-#[allow(dead_code)]
 pub fn add_to_createapp_modules(src: &str, symbol: &str) -> Option<String> {
     let tree = parser().parse(src, None).unwrap();
     let root = tree.root_node();
