@@ -208,6 +208,14 @@ fn insert_into_object_array(src: &str, object: Node, key: &str, symbol: &str) ->
         return if parses_clean(&out) { Some(out) } else { None };
     }
 
+    // The key exists but its value isn't an array literal (e.g. `controllers: SHARED`
+    // or `modules: MODULES`). Creating a second `key: [...]` pair parses clean yet
+    // silently shadows the user's value at runtime (JS keeps the last duplicate key),
+    // so `parses_clean` can't catch it. Refuse — the caller falls back to emit-only.
+    if object_has_key(object, src, key) {
+        return None;
+    }
+
     // key absent → create `key: [symbol]` inside the object, before its '}'
     let obj_open = object.start_byte();
     let obj_close = object.end_byte() - 1; // the '}'
@@ -227,6 +235,24 @@ fn insert_into_object_array(src: &str, object: Node, key: &str, symbol: &str) ->
     } else {
         None
     }
+}
+
+/// True when `object` has any direct `pair` child whose key text equals `key`,
+/// regardless of the value's kind. Used to avoid creating a duplicate key when
+/// an existing pair's value isn't an array literal.
+fn object_has_key(object: Node, src: &str, key: &str) -> bool {
+    let mut c = object.walk();
+    for child in object.named_children(&mut c) {
+        if child.kind() == "pair"
+            && child
+                .child_by_field_name("key")
+                .and_then(|k| k.utf8_text(src.as_bytes()).ok())
+                == Some(key)
+        {
+            return true;
+        }
+    }
+    false
 }
 
 /// Returns `(open_bracket_byte, close_bracket_byte)` of the `key: [...]` array
@@ -527,5 +553,19 @@ export class AppModule {}
         let src = "const app = createApp({});\n";
         let out = add_to_createapp_modules(src, "AppModule").unwrap();
         assert!(out.contains("modules: [AppModule]"));
+    }
+
+    #[test]
+    fn refuses_duplicate_key_when_module_value_not_array() {
+        // `controllers` exists but its value is an identifier, not an array literal.
+        // Adding must NOT create a second `controllers` pair (silent runtime shadowing).
+        let src = "@Module({ mountpoint: '/', controllers: SHARED })\nexport class AppModule {}\n";
+        assert!(add_to_module_array(src, "controllers", "X").is_none());
+    }
+
+    #[test]
+    fn refuses_duplicate_modules_when_createapp_value_not_array() {
+        let src = "const app = createApp({ modules: MODULES });\n";
+        assert!(add_to_createapp_modules(src, "UsersModule").is_none());
     }
 }
