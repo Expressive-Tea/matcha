@@ -1,0 +1,27 @@
+name: Promote → GitHub
+
+# Runs on GITEA ONLY. Mirrors only main + version tags to the public GitHub repo.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+jobs:
+  push-github:
+    if: ${{ github.server_url != 'https://github.com' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Push main + tags to GitHub
+        env:
+          GH_TOKEN: ${{ secrets.GH_PROMOTE_TOKEN }}
+        run: |
+          git remote add github "https://x-access-token:${GH_TOKEN}@github.com/Expressive-Tea/matcha.git"
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            git push github "refs/tags/${{ github.ref_name }}"
+          else
+            git push github "HEAD:refs/heads/main"
+            git push github --tags
+          fi
