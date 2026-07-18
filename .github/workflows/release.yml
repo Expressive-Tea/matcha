@@ -83,16 +83,23 @@ jobs:
             matcha-${{ matrix.target }}.tar.gz.sha256
 
   # crates.io = production only.
+  # crates.io = production only, via OIDC Trusted Publishing (no CARGO_TOKEN).
+  # Requires a trusted publisher configured on crates.io (Expressive-Tea/matcha, release.yml).
   publish-crate:
     if: ${{ github.server_url == 'https://github.com' }}
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      # Exchanges the OIDC id-token for a short-lived crates.io token.
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
       - name: cargo publish
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         run: cargo publish --locked
