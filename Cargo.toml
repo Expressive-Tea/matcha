@@ -1,6 +1,6 @@
 [package]
 name = "matcha-cli"
-version = "26.7.0-beta.0"
+version = "26.8.0-beta.0"
 edition = "2021"
 description = "The CLI for Green Tea — scaffold and manage graph-based apps."
 license = "MIT"
