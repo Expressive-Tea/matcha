@@ -1,8 +1,8 @@
 [package]
 name = "matcha-cli"
-version = "26.7.0-beta.0"
+version = "26.8.0-beta.0"
 edition = "2021"
-description = "The CLI for Green Tea — scaffold and manage graph-based apps."
+description = "The green-tea CLI: scaffold a project, generate controllers, steps and providers already wired into their module, and run with your runtime detected. One native binary, no JS runtime needed to install it."
 license = "MIT"
 repository = "https://github.com/Expressive-Tea/matcha"
 

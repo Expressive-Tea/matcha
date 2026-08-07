@@ -1,24 +1,32 @@
 # matcha
 
-The [green-tea](https://git.svc.zoit.services/Green-Tea/core) CLI — scaffold, run, and generate green-tea apps from a single native binary. No JS runtime required to install or operate.
+The [green-tea](https://github.com/Expressive-Tea/green-tea) CLI — scaffold, run, and generate green-tea apps from a single native binary. No JS runtime required to install or operate.
 
 ## Install
 
 ```bash
-curl -fsSL https://git.svc.zoit.services/Green-Tea/matcha/raw/branch/main/install.sh | sh
+cargo install matcha-cli
 ```
 
-Installs a prebuilt binary to `~/.local/bin` — no Rust required. Env vars go on
-the `sh` side of the pipe:
+Builds from [crates.io](https://crates.io/crates/matcha-cli) and installs the `matcha`
+binary. Needs a Rust toolchain; takes a few seconds.
+
+**Prebuilt binary** (no Rust), from the latest GitHub release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Expressive-Tea/matcha/main/install.sh | sh
+```
+
+Drops the binary in `~/.local/bin`. Env vars go on the `sh` side of the pipe:
 
 ```bash
 curl -fsSL …/install.sh | MATCHA_VERSION=v26.7.0 MATCHA_INSTALL_DIR=/usr/local/bin sh
 ```
 
-**From source** (requires Rust — compiles and installs):
+**From git** (compiles the default branch):
 
 ```bash
-cargo install --git https://git.svc.zoit.services/Green-Tea/matcha
+cargo install --git https://github.com/Expressive-Tea/matcha
 ```
 
 ## Usage

@@ -1,14 +1,17 @@
 #!/bin/sh
-# matcha installer — downloads a prebuilt binary from Gitea Releases.
+# matcha installer — downloads a prebuilt binary from GitHub Releases.
 #   curl -fsSL <raw>/install.sh | sh
 # Env: MATCHA_VERSION (tag, default latest), MATCHA_INSTALL_DIR (default ~/.local/bin),
-#      MATCHA_REPO_BASE (default the Gitea repo URL).
+#      MATCHA_REPO_BASE / MATCHA_API_BASE (override to install from the internal Gitea,
+#      whose release API is GitHub-compatible for everything this script touches).
 set -eu
 
-REPO_BASE="${MATCHA_REPO_BASE:-https://git.svc.zoit.services/Green-Tea/matcha}"
-# The API lives at the host root (/api/v1/...), NOT under the repo path. Keep it
-# separate from REPO_BASE (which is used for release DOWNLOAD urls under the repo).
-API_BASE="${MATCHA_API_BASE:-https://git.svc.zoit.services/api/v1/repos/Green-Tea/matcha}"
+# Public by default: the Gitea host is unreachable outside the network, and this script
+# is what crates.io and the README point people at.
+REPO_BASE="${MATCHA_REPO_BASE:-https://github.com/Expressive-Tea/matcha}"
+# The API lives on its own host, NOT under the repo path. Keep it separate from
+# REPO_BASE (which is used for release DOWNLOAD urls under the repo).
+API_BASE="${MATCHA_API_BASE:-https://api.github.com/repos/Expressive-Tea/matcha}"
 INSTALL_DIR="${MATCHA_INSTALL_DIR:-$HOME/.local/bin}"
 
 err() { echo "matcha-install: $*" >&2; exit 1; }
