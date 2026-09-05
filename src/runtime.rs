@@ -5,6 +5,11 @@ pub enum Runtime {
     Node,
     Deno,
     Bun,
+    /// Cloudflare Workers. Unlike the other three this is a deploy target as
+    /// much as a local one — `wrangler dev` runs it in real workerd, but the
+    /// graph is resolved under node, since introspection never touches the
+    /// edge handler.
+    Edge,
 }
 
 impl Runtime {
@@ -13,6 +18,7 @@ impl Runtime {
             "node" => Some(Runtime::Node),
             "deno" => Some(Runtime::Deno),
             "bun" => Some(Runtime::Bun),
+            "edge" => Some(Runtime::Edge),
             _ => None,
         }
     }
@@ -38,6 +44,10 @@ fn override_from_toml(dir: &Path) -> Option<Runtime> {
 pub fn detect(dir: &Path) -> Option<Runtime> {
     if let Some(r) = override_from_toml(dir) {
         return Some(r);
+    }
+    // Before package.json, which an edge project also has.
+    if exists(dir, "wrangler.toml") || exists(dir, "wrangler.jsonc") {
+        return Some(Runtime::Edge);
     }
     if exists(dir, "deno.json") || exists(dir, "deno.jsonc") {
         return Some(Runtime::Deno);
@@ -90,6 +100,14 @@ mod tests {
         touch(d.path(), "deno.json");
         fs::write(d.path().join("matcha.toml"), "runtime = \"bun\"\n").unwrap();
         assert_eq!(detect(d.path()), Some(Runtime::Bun));
+    }
+
+    #[test]
+    fn wrangler_toml_wins_over_package_json() {
+        let d = tempdir().unwrap();
+        touch(d.path(), "package.json");
+        fs::write(d.path().join("wrangler.toml"), "name = \"x\"\n").unwrap();
+        assert_eq!(detect(d.path()), Some(Runtime::Edge));
     }
 
     #[test]

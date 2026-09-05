@@ -45,17 +45,36 @@ case "$os" in
   Linux)
     case "$arch" in
       x86_64|amd64)  triple="x86_64-unknown-linux-musl" ;;
-      arm64|aarch64) err "linux arm64 has no prebuilt binary yet — use: cargo install --git $REPO_BASE" ;;
+      arm64|aarch64) triple="aarch64-unknown-linux-musl" ;;
       *) err "unsupported Linux arch: $arch" ;;
     esac ;;
   *) err "unsupported OS: $os — try: cargo install --git $REPO_BASE" ;;
 esac
 
+# Resolving "latest" prefers the /releases/latest redirect over the release API.
+# The API is rate-limited to 60 requests an hour per IP unauthenticated, which an
+# office behind one NAT or a CI runner burns through — and when it trips, the
+# response carries no tag_name, so the old code failed with "could not resolve
+# latest release tag" and no hint of why. The redirect has no such limit and
+# Gitea implements it the same way. The API stays as the fallback, since that is
+# the path wget can follow without parsing headers.
+resolve_latest() {
+  if command -v curl >/dev/null 2>&1; then
+    effective=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "$REPO_BASE/releases/latest" 2>/dev/null || true)
+    case "$effective" in
+      */releases/tag/*) echo "${effective##*/}"; return 0 ;;
+    esac
+  fi
+  fetch "$API_BASE/releases/latest" 2>/dev/null \
+    | grep -o '"tag_name":[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4
+}
+
 version="${MATCHA_VERSION:-latest}"
 if [ "$version" = "latest" ]; then
-  tag=$(fetch "$API_BASE/releases/latest" \
-        | grep -o '"tag_name":[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
-  [ -n "$tag" ] || err "could not resolve latest release tag"
+  tag=$(resolve_latest)
+  [ -n "$tag" ] || err "could not resolve the latest release tag.
+  The release API may be rate-limited (60/hour per IP without a token).
+  Pin a version instead:  curl -fsSL <raw>/install.sh | MATCHA_VERSION=v26.8.0-beta.0 sh"
 else
   tag="$version"
 fi

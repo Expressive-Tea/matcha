@@ -1,0 +1,8 @@
+{
+  "name": "{{project_name}}",
+  "type": "module",
+  "private": true,
+  "scripts": { "dev": "wrangler dev", "deploy": "wrangler deploy" },
+  "dependencies": { "@green-tea/core": "npm:@jsr/green-tea__core@{{core_version}}" },
+  "devDependencies": { "tsx": "^4", "typescript": "^5", "wrangler": "^4" }
+}

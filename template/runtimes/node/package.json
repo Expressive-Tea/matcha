@@ -3,6 +3,6 @@
   "type": "module",
   "private": true,
   "scripts": { "dev": "tsx watch src/main.ts" },
-  "dependencies": { "@green-tea/core": "^26.7.0-beta.0" },
+  "dependencies": { "@green-tea/core": "{{core_version}}" },
   "devDependencies": { "tsx": "^4", "typescript": "^5" }
 }

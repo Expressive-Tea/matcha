@@ -8,7 +8,10 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 os=$(uname -s); arch=$(uname -m)
 case "$os" in
   Darwin) case "$arch" in arm64|aarch64) triple=aarch64-apple-darwin;; x86_64) triple=x86_64-apple-darwin;; esac;;
-  Linux)  case "$arch" in x86_64|amd64) triple=x86_64-unknown-linux-musl;; esac;;
+  Linux)  case "$arch" in
+            x86_64|amd64) triple=x86_64-unknown-linux-musl;;
+            arm64|aarch64) triple=aarch64-unknown-linux-musl;;
+          esac;;
 esac
 [ -n "${triple:-}" ] || { echo "SKIP: unsupported test host"; exit 0; }
 
@@ -42,5 +45,20 @@ if MATCHA_REPO_BASE="file://$work/fixture" MATCHA_VERSION="$tag" MATCHA_INSTALL_
   fail "install.sh should have failed on checksum mismatch"
 fi
 [ -e "$bin2/matcha" ] && fail "matcha must NOT be installed on checksum mismatch"
+
+# --- case 3: an unresolvable "latest" explains itself and installs nothing ---
+# Both bases point at a path that does not exist, so the redirect and the API
+# fallback each come back empty. The branch is worth a test because its failure
+# mode is a message: the old one said only "could not resolve latest release
+# tag", which is also what a rate-limited API produces.
+bin3="$work/bin3"
+out=$(MATCHA_REPO_BASE="file://$work/nowhere" MATCHA_API_BASE="file://$work/nowhere" \
+        MATCHA_INSTALL_DIR="$bin3" sh "$here/install.sh" 2>&1) && \
+  fail "install.sh should have failed with no resolvable latest"
+case "$out" in
+  *MATCHA_VERSION*) ;;
+  *) fail "the unresolvable-latest error must point at MATCHA_VERSION; got: $out" ;;
+esac
+[ -e "$bin3/matcha" ] && fail "matcha must NOT be installed when latest cannot resolve"
 
 echo "PASS: test_install.sh"

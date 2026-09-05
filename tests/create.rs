@@ -84,3 +84,38 @@ fn create_module_writes_and_registers_in_createapp() {
     assert!(main.contains("AppModule, UsersModule"));
     assert!(main.contains("import { UsersModule }"));
 }
+
+/// A project scaffolded today composes its graph in `src/app.ts`, so that is
+/// where a new module has to be registered. `src/main.ts` only serves, and
+/// wiring a module into it would put the module in a file that never calls
+/// `createApp` — silently, since `add_to_createapp_modules` would simply find
+/// nothing to edit and the CLI would print its "add it manually" hint.
+#[test]
+fn create_module_prefers_app_ts_over_main_ts() {
+    let d = tempdir().unwrap();
+    std::fs::create_dir_all(d.path().join("src")).unwrap();
+    std::fs::write(
+        d.path().join("src/app.ts"),
+        "import { createApp } from '@green-tea/core';\nimport { AppModule } from './app.module';\n\nexport const app = createApp({ modules: [AppModule] });\n",
+    )
+    .unwrap();
+    std::fs::write(
+        d.path().join("src/main.ts"),
+        "import { app } from './app';\n\napp.listen(3000);\n",
+    )
+    .unwrap();
+
+    Command::cargo_bin("matcha")
+        .unwrap()
+        .current_dir(d.path())
+        .args(["create", "module", "Users"])
+        .assert()
+        .success();
+
+    let app_ts = std::fs::read_to_string(d.path().join("src/app.ts")).unwrap();
+    assert!(app_ts.contains("AppModule, UsersModule"));
+    assert!(app_ts.contains("import { UsersModule }"));
+
+    let main = std::fs::read_to_string(d.path().join("src/main.ts")).unwrap();
+    assert!(!main.contains("UsersModule"), "main.ts was edited: {main}");
+}
