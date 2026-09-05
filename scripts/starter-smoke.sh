@@ -79,4 +79,17 @@ echo "▸ matcha graph"
 "$MATCHA" explain /zen | grep -q '\[sse\]' || { echo "explain did not report the sse route"; exit 1; }
 echo "✓ graph and explain resolve"
 
+# Every `matcha add` capability, spliced into one controller and type-checked
+# together. The stubs name core's real surface — `sse()` with an id, `@Ws` with
+# `@inbound()`, `MultipartBody`, `@Transformer` — so this is the thing that
+# notices when that surface moves. No peer dependency is installed on purpose:
+# core lazy-requires `ws` and `busboy`, so neither is needed to compile, and a
+# check that needed them would be hiding that fact.
+echo "▸ matcha add (every capability)"
+for cap in sse ws upload stream buffer; do
+  "$MATCHA" add "$cap" >/dev/null || { echo "matcha add $cap failed"; exit 1; }
+done
+"${CHECK[@]}" || { echo "the generated handlers do not type-check"; exit 1; }
+echo "✓ every add capability type-checks"
+
 echo "✓ $RUNTIME starter is good"

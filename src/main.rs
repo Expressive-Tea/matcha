@@ -60,8 +60,11 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Command::Add { capability } => {
-            if let Err(e) = cmd_add::run(&capability) {
+        Command::Add {
+            capability,
+            controller,
+        } => {
+            if let Err(e) = cmd_add::run(&capability, controller.as_deref()) {
                 eprintln!("error: {e}");
                 std::process::exit(1);
             }

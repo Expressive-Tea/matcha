@@ -49,7 +49,10 @@ pub enum Command {
     },
     /// Add a capability to a controller
     Add {
-        #[arg(value_parser = ["sse", "stream", "buffer"])]
+        #[arg(value_parser = ["sse", "stream", "buffer", "ws", "upload"])]
         capability: String,
+        /// Which controller to edit (default: the only one in src/controllers)
+        #[arg(long)]
+        controller: Option<String>,
     },
 }

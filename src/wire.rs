@@ -64,10 +64,27 @@ fn has_error(node: Node) -> bool {
 /// accepted; if merging somehow produces broken text, this falls back to
 /// appending a fresh import line rather than returning broken source.
 pub fn add_import(src: &str, symbol: &str, from: &str) -> String {
+    insert_import(src, symbol, from, false)
+}
+
+/// Same as [`add_import`], but for `import type { ... } from '<from>';`.
+///
+/// A type used in a decorated method signature has to arrive this way. Under
+/// `isolatedModules` with `emitDecoratorMetadata` — Deno's defaults — a type
+/// reached through a value import is TS1272, because the emitted
+/// `design:paramtypes` would reference a binding the compiler erased. Node and
+/// bun's `tsc` accept it, so the same generated handler compiles on two
+/// runtimes and fails on the third.
+pub fn add_type_import(src: &str, symbol: &str, from: &str) -> String {
+    insert_import(src, symbol, from, true)
+}
+
+fn insert_import(src: &str, symbol: &str, from: &str, type_only: bool) -> String {
     let tree = parser().parse(src, None).unwrap();
     let root = tree.root_node();
+    let keyword = if type_only { "import type" } else { "import" };
 
-    if let Some(named_imports) = find_named_imports(&root, src, from) {
+    if let Some(named_imports) = find_named_imports(&root, src, from, type_only) {
         let mut c = named_imports.walk();
         let already_present = named_imports.named_children(&mut c).any(|spec| {
             spec.kind() == "import_specifier"
@@ -98,7 +115,7 @@ pub fn add_import(src: &str, symbol: &str, from: &str) -> String {
         // through to the append-a-new-line path below rather than return it.
     }
 
-    let line = format!("import {{ {symbol} }} from '{from}';");
+    let line = format!("{keyword} {{ {symbol} }} from '{from}';");
     if src.contains(&line) {
         return src.to_string();
     }
@@ -120,16 +137,39 @@ pub fn add_import(src: &str, symbol: &str, from: &str) -> String {
     out
 }
 
+/// Whether an `import_statement` is the `import type { ... }` form.
+///
+/// Read off the statement's own text rather than its grammar node: the `type`
+/// modifier's shape differs between tree-sitter-typescript versions, and the
+/// node here is always a well-formed import statement, so the prefix is exact.
+fn is_type_only(stmt: &Node, src: &str) -> bool {
+    stmt.utf8_text(src.as_bytes())
+        .map(|text| text.trim_start().starts_with("import type"))
+        .unwrap_or(false)
+}
+
 /// Finds the `named_imports` (`{ A, B, C }`) brace of the top-level `import
 /// { ... } from '<from>';` statement whose module specifier string literal
-/// equals `from` exactly. Returns `None` when no import statement has that
-/// source, or when the matching statement has no named-imports clause at all
-/// (e.g. a bare default import) — callers treat that as "can't merge, fall
-/// back to appending a new line".
-fn find_named_imports<'a>(root: &Node<'a>, src: &str, from: &str) -> Option<Node<'a>> {
+/// equals `from` exactly and whose type-only-ness matches `type_only`. Returns
+/// `None` when no import statement has that source, or when the matching
+/// statement has no named-imports clause at all (e.g. a bare default import) —
+/// callers treat that as "can't merge, fall back to appending a new line".
+///
+/// The `type_only` split matters in both directions: merging a value symbol
+/// into an `import type` line erases it at runtime, and merging a type into a
+/// value line is the TS1272 that [`add_type_import`] exists to avoid.
+fn find_named_imports<'a>(
+    root: &Node<'a>,
+    src: &str,
+    from: &str,
+    type_only: bool,
+) -> Option<Node<'a>> {
     let mut c = root.walk();
     for stmt in root.children(&mut c) {
         if stmt.kind() != "import_statement" {
+            continue;
+        }
+        if is_type_only(&stmt, src) != type_only {
             continue;
         }
         let Some(source) = stmt.child_by_field_name("source") else {
@@ -567,5 +607,56 @@ export class AppModule {}
     fn refuses_duplicate_modules_when_createapp_value_not_array() {
         let src = "const app = createApp({ modules: MODULES });\n";
         assert!(add_to_createapp_modules(src, "UsersModule").is_none());
+    }
+
+    /// A type in a decorated signature must not ride the value import: under
+    /// `isolatedModules` + `emitDecoratorMetadata` that is TS1272, which node's
+    /// and bun's tsc accept and Deno rejects.
+    #[test]
+    fn type_import_gets_its_own_statement() {
+        let src = "import { Route } from '@green-tea/core';\n";
+        let out = add_type_import(src, "MultipartBody", "@green-tea/core");
+        assert!(
+            out.contains("import type { MultipartBody } from '@green-tea/core';"),
+            "{out}"
+        );
+        assert!(
+            out.contains("import { Route } from '@green-tea/core';"),
+            "{out}"
+        );
+    }
+
+    /// The dangerous direction: a value symbol merged into an `import type`
+    /// line is erased at compile time, so the decorator it names is simply
+    /// undefined at runtime.
+    #[test]
+    fn value_import_never_merges_into_a_type_import() {
+        let src = "import type { MultipartBody } from '@green-tea/core';\n";
+        let out = add_import(src, "Post", "@green-tea/core");
+        assert!(
+            out.contains("import { Post } from '@green-tea/core';"),
+            "{out}"
+        );
+        assert!(
+            !out.contains("import type { MultipartBody, Post }"),
+            "Post was merged into the type-only import:\n{out}"
+        );
+    }
+
+    #[test]
+    fn type_import_merges_into_an_existing_type_import() {
+        let src = "import type { MultipartBody } from '@green-tea/core';\n";
+        let out = add_type_import(src, "UploadedFile", "@green-tea/core");
+        assert!(
+            out.contains("import type { MultipartBody, UploadedFile }"),
+            "{out}"
+        );
+    }
+
+    #[test]
+    fn type_import_is_idempotent() {
+        let src = "import type { MultipartBody } from '@green-tea/core';\n";
+        let out = add_type_import(src, "MultipartBody", "@green-tea/core");
+        assert_eq!(out, src);
     }
 }

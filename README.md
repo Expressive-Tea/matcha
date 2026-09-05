@@ -36,7 +36,7 @@ matcha new my-api                          # scaffold from the official starter
 matcha new my-api --template-url gh:owner/repo   # scaffold from any git template
 matcha run                                 # detect node/deno/bun and run in watch
 matcha create controller Users             # generate + auto-wire into @Module
-matcha add sse                             # add a capability (sse|stream|buffer) to your controller
+matcha add sse                             # add a capability to your controller
 matcha graph                               # draw the dependency graph
 matcha explain /users/:id                  # one route's chain, in execution order
 ```
@@ -79,6 +79,21 @@ be installed, since this runs your code under your runtime.
 
 `explain` takes the route **pattern** as declared, not a concrete URL:
 `/users/:id`, not `/users/42`. A miss lists the patterns that are registered.
+
+### `add` capabilities
+
+| | generates |
+|---|---|
+| `sse` | `@Sse` stream tagged with `sse(data, { id })`, reading `@header('last-event-id')` to resume |
+| `ws` | `@Ws` duplex handler: consume `@inbound()`, return a `channel()` — needs `ws` on Node |
+| `stream` | `@Stream` chunked response |
+| `upload` | `@Post` with `@body(): MultipartBody` — needs `busboy` |
+| `buffer` | `@Get` with a custom `@Transformer` shaping the whole response |
+
+`matcha add <cap>` edits the only controller under `src/controllers`; with more
+than one it refuses and lists them, and `--controller <path>` picks. Repeats are
+no-ops. Both peer dependencies are lazy-loaded by core, so neither is needed to
+compile — only to serve the route.
 
 ### `create` / `add` auto-wiring
 
