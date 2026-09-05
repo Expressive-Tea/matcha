@@ -2,8 +2,10 @@ mod check;
 mod cli;
 mod cmd_add;
 mod cmd_create;
+mod cmd_graph;
 mod cmd_new;
 mod cmd_run;
+mod entry;
 mod runtime;
 mod template;
 mod wire;
@@ -32,6 +34,28 @@ fn main() {
         }
         Command::Create { kind, name, check } => {
             if let Err(e) = cmd_create::run(&kind, &name, check) {
+                eprintln!("error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Command::Graph { format, entry, out } => {
+            if let Err(e) = cmd_graph::graph(
+                std::path::Path::new("."),
+                &format,
+                entry.as_deref(),
+                out.as_deref(),
+            ) {
+                eprintln!("error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Command::Explain { route, entry, out } => {
+            if let Err(e) = cmd_graph::explain(
+                std::path::Path::new("."),
+                &route,
+                entry.as_deref(),
+                out.as_deref(),
+            ) {
                 eprintln!("error: {e}");
                 std::process::exit(1);
             }

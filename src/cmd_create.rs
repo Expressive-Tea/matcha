@@ -5,7 +5,7 @@
 use std::io::{Error, ErrorKind};
 use std::path::Path;
 
-use crate::wire;
+use crate::{entry, wire};
 
 pub fn run(kind: &str, name: &str, check: bool) -> std::io::Result<()> {
     match kind {
@@ -86,7 +86,7 @@ fn create_piece(
 }
 
 /// Writes `src/<name>.module.ts` and registers it in the `createApp({ modules })`
-/// call in `src/main.ts`. Emit-only + hint on failure.
+/// call in the project's entry file. Emit-only + hint on failure.
 fn create_module(name: &str, check: bool) -> std::io::Result<()> {
     let lower = name.to_lowercase();
     let file = Path::new("src").join(format!("{lower}.module.ts"));
@@ -96,20 +96,23 @@ fn create_module(name: &str, check: bool) -> std::io::Result<()> {
 
     let symbol = format!("{name}Module");
     let from = format!("./{lower}.module");
-    let main_path = Path::new("src/main.ts");
-    if !main_path.exists() {
-        println!("→ register {symbol} in createApp({{ modules }}) manually (no src/main.ts found)");
+    let Some(entry_path) = entry::find(Path::new(".")) else {
+        println!(
+            "→ register {symbol} in createApp({{ modules }}) manually (no {} found)",
+            entry::candidates()
+        );
         return maybe_check(check);
-    }
-    let src = std::fs::read_to_string(main_path)?;
+    };
+    let src = std::fs::read_to_string(&entry_path)?;
     let imported = wire::add_import(&src, &symbol, &from);
     match wire::add_to_createapp_modules(&imported, &symbol) {
         Some(wired) => {
-            std::fs::write(main_path, wired)?;
+            std::fs::write(&entry_path, wired)?;
             println!("✓ registered {symbol} in createApp");
         }
         None => println!(
-            "→ could not auto-register; add {symbol} to createApp modules[] in src/main.ts"
+            "→ could not auto-register; add {symbol} to createApp modules[] in {}",
+            entry_path.display()
         ),
     }
     maybe_check(check)

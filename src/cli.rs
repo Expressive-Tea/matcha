@@ -27,6 +27,26 @@ pub enum Command {
         #[arg(long)]
         check: bool,
     },
+    /// Print the dependency graph (Mermaid, DOT, or JSON)
+    Graph {
+        #[arg(long, default_value = "mermaid", value_parser = ["mermaid", "dot", "json"])]
+        format: String,
+        /// Entry file exporting `app` (default: src/app.ts, then src/main.ts)
+        #[arg(long)]
+        entry: Option<String>,
+        /// Write to this file instead of stdout
+        #[arg(long)]
+        out: Option<String>,
+    },
+    /// Explain one route's chain, in execution order
+    Explain {
+        /// The route pattern as declared, e.g. /users/:id
+        route: String,
+        #[arg(long)]
+        entry: Option<String>,
+        #[arg(long)]
+        out: Option<String>,
+    },
     /// Add a capability to a controller
     Add {
         #[arg(value_parser = ["sse", "stream", "buffer"])]

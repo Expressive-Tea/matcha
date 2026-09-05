@@ -6,6 +6,10 @@ on:
     branches: [develop, main]
   push:
     branches: [develop, main]
+  # Weekly, so a core release that breaks the starter or leaves the pin behind
+  # shows up here rather than in somebody's `matcha new`.
+  schedule:
+    - cron: '0 6 * * 1'
 
 jobs:
   check:
@@ -21,3 +25,53 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --locked
+
+  # `cargo test` proves the CLI writes the files it means to write. It cannot
+  # prove those files describe a project the current @green-tea/core will run —
+  # which is how the templates sat two core releases behind for two months with
+  # a green build the whole time. This job scaffolds, installs, type-checks,
+  # boots and introspects a real starter, per runtime.
+  starter:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [node, deno, bun]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - run: cargo build
+      - name: Install Deno
+        if: matrix.runtime == 'deno'
+        run: |
+          curl -fsSL https://deno.land/install.sh | sh -s -- --yes
+          echo "$HOME/.deno/bin" >> "$GITHUB_PATH"
+      - name: Install Bun
+        if: matrix.runtime == 'bun'
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+      - run: scripts/starter-smoke.sh ${{ matrix.runtime }}
+
+  # The pin in src/template.rs is exact because core is prerelease-only and no
+  # caret range can move off its first matching prerelease. Exact pins go stale
+  # silently, so this is the thing that notices. Scheduled only: a core release
+  # should nag on Monday, not redden an unrelated pull request.
+  core-freshness:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare the scaffold pin against the beta dist-tag
+        run: |
+          pinned=$(grep -oP 'CORE_VERSION: &str = "\K[^"]+' src/template.rs)
+          latest=$(npm view @green-tea/core dist-tags.beta)
+          echo "pinned=$pinned latest=$latest"
+          if [ "$pinned" != "$latest" ]; then
+            echo "::error::matcha scaffolds @green-tea/core@$pinned but the beta tag is $latest."
+            echo "Bump CORE_VERSION in src/template.rs and let the starter job prove it still boots."
+            exit 1
+          fi

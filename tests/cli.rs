@@ -11,7 +11,9 @@ fn help_lists_all_subcommands() {
         .stdout(contains("new"))
         .stdout(contains("run"))
         .stdout(contains("create"))
-        .stdout(contains("add"));
+        .stdout(contains("add"))
+        .stdout(contains("graph"))
+        .stdout(contains("explain"));
 }
 
 #[test]
