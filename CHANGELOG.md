@@ -9,7 +9,7 @@ green-tea's convention. **The CLI ships on its own version line**: `matcha` 26.8
 mean `@green-tea/core` 26.8, and the two release independently. The core version a scaffold
 is pinned to is `CORE_VERSION` in `src/template.rs`, and each entry below says when it moved.
 
-## [Unreleased]
+## [26.9.0-beta.0] - 2026-09-05
 
 ### Added
 
@@ -182,6 +182,6 @@ First tagged release. A single native binary, no JS runtime needed to install it
 - **A `curl | sh` installer** with sha256 verification, and cross-platform binaries attached
   to each release.
 
-[Unreleased]: https://github.com/Expressive-Tea/matcha/compare/v26.8.0-beta.0...HEAD
+[26.9.0-beta.0]: https://github.com/Expressive-Tea/matcha/compare/v26.8.0-beta.0...v26.9.0-beta.0
 [26.8.0-beta.0]: https://github.com/Expressive-Tea/matcha/compare/v26.7.0...v26.8.0-beta.0
 [26.7.0]: https://github.com/Expressive-Tea/matcha/releases/tag/v26.7.0
