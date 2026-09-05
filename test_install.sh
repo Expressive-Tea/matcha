@@ -8,7 +8,10 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 os=$(uname -s); arch=$(uname -m)
 case "$os" in
   Darwin) case "$arch" in arm64|aarch64) triple=aarch64-apple-darwin;; x86_64) triple=x86_64-apple-darwin;; esac;;
-  Linux)  case "$arch" in x86_64|amd64) triple=x86_64-unknown-linux-musl;; esac;;
+  Linux)  case "$arch" in
+            x86_64|amd64) triple=x86_64-unknown-linux-musl;;
+            arm64|aarch64) triple=aarch64-unknown-linux-musl;;
+          esac;;
 esac
 [ -n "${triple:-}" ] || { echo "SKIP: unsupported test host"; exit 0; }
 

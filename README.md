@@ -17,7 +17,9 @@ binary. Needs a Rust toolchain; takes a few seconds.
 curl -fsSL https://raw.githubusercontent.com/Expressive-Tea/matcha/main/install.sh | sh
 ```
 
-Drops the binary in `~/.local/bin`. Env vars go on the `sh` side of the pipe:
+Drops the binary in `~/.local/bin`. Prebuilt for macOS (arm64, x86_64) and Linux
+(arm64, x86_64), statically linked against musl so any distro works, Alpine
+included. Env vars go on the `sh` side of the pipe:
 
 ```bash
 curl -fsSL …/install.sh | MATCHA_VERSION=v26.7.0 MATCHA_INSTALL_DIR=/usr/local/bin sh

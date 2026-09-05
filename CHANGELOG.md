@@ -104,6 +104,25 @@ is pinned to is `CORE_VERSION` in `src/template.rs`, and each entry below says w
   was `TS2868: Cannot find name 'Bun'` — meaning `tsc --noEmit`, and therefore
   `matcha create --check`, failed on every bun project the CLI has ever scaffolded.
 
+- **A prebuilt binary for Linux arm64.** The installer used to refuse that platform and
+  send you to `cargo install --git` — so Graviton, a Raspberry Pi, an ARM CI runner and
+  Docker on Apple Silicon all needed a Rust toolchain. `rustup target add` alone could
+  never have produced it: `tree-sitter` and `tree-sitter-typescript` compile C through the
+  `cc` crate, and Ubuntu ships no aarch64 musl cross compiler. Both Linux targets now build
+  through zig, which is one, so the arch that was missing and the arch that worked share a
+  toolchain instead of having two.
+
+  Each release job also runs the binary it just built, wherever the runner can execute it —
+  a binary that links and will not start is the failure a release pipeline must not leave
+  for a user's terminal to find. Both macOS binaries run on the arm64 macOS runner, the
+  Intel one through Rosetta, which is probed rather than assumed since a runner without it
+  would otherwise fail a release over its own configuration; and each Linux binary runs wherever
+  `ubuntu-latest` resolves to its architecture. Because that last part depends on the
+  runner pool rather than on the pipeline, a separate job pins an arm64 Linux runner and
+  installs the published binary there through `install.sh` — so the arm64 artifact is
+  started before it reaches anyone, on every release, and the installer's arm64 branch and
+  checksum verification are exercised against the real assets on the way.
+
 - **`install.sh` resolves `latest` without the release API.** The API is rate-limited to
   60 requests an hour per IP unauthenticated — an office behind one NAT or a CI runner
   burns through it — and a throttled response carries no `tag_name`, so the installer

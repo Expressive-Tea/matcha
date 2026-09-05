@@ -45,7 +45,7 @@ case "$os" in
   Linux)
     case "$arch" in
       x86_64|amd64)  triple="x86_64-unknown-linux-musl" ;;
-      arm64|aarch64) err "linux arm64 has no prebuilt binary yet — use: cargo install --git $REPO_BASE" ;;
+      arm64|aarch64) triple="aarch64-unknown-linux-musl" ;;
       *) err "unsupported Linux arch: $arch" ;;
     esac ;;
   *) err "unsupported OS: $os — try: cargo install --git $REPO_BASE" ;;
