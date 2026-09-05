@@ -5,7 +5,7 @@ fn check_command(rt: Runtime) -> (&'static str, Vec<&'static str>) {
     match rt {
         Runtime::Deno => ("deno", vec!["check", "src/app.module.ts"]),
         Runtime::Bun => ("bunx", vec!["tsc", "--noEmit"]),
-        Runtime::Node => ("npx", vec!["tsc", "--noEmit"]),
+        Runtime::Node | Runtime::Edge => ("npx", vec!["tsc", "--noEmit"]),
     }
 }
 

@@ -5,63 +5,88 @@
 use std::io::{Error, ErrorKind};
 use std::path::Path;
 
-use crate::wire;
+use crate::{entry, wire};
+
+/// A piece that lives inside a module: a file under `src/<subdir>/` plus an
+/// entry in one of `@Module`'s arrays.
+///
+/// `module` is not one of these — it is registered in the `createApp` call
+/// rather than in a module array — so it stays a case of its own below.
+struct Piece {
+    /// Name as typed on the command line.
+    kind: &'static str,
+    /// Directory under `src/`, and the `@Module` key, which are the same word
+    /// for all three.
+    subdir: &'static str,
+    /// Filename infix: `users.controller.ts`.
+    ext: &'static str,
+    /// Appended to the given name to form the exported symbol.
+    suffix: &'static str,
+    stub: fn(&str) -> String,
+}
+
+const PIECES: &[Piece] = &[
+    Piece {
+        kind: "controller",
+        subdir: "controllers",
+        ext: "controller",
+        suffix: "Controller",
+        stub: controller_stub,
+    },
+    Piece {
+        kind: "step",
+        subdir: "steps",
+        ext: "step",
+        suffix: "Step",
+        stub: step_stub,
+    },
+    Piece {
+        kind: "provider",
+        subdir: "providers",
+        ext: "provider",
+        suffix: "Provider",
+        stub: provider_stub,
+    },
+];
+
+/// Every `create` kind, for clap's `value_parser` and for error messages. One
+/// list, so a new kind cannot be accepted by the parser and rejected by `run`
+/// (or the reverse).
+pub fn kinds() -> Vec<&'static str> {
+    std::iter::once("module")
+        .chain(PIECES.iter().map(|p| p.kind))
+        .collect()
+}
 
 pub fn run(kind: &str, name: &str, check: bool) -> std::io::Result<()> {
-    match kind {
-        "controller" => create_piece(
-            name,
-            check,
-            "controllers",
-            "controller",
-            "Controller",
-            "controllers",
-            controller_stub(name),
-        ),
-        "step" => create_piece(
-            name,
-            check,
-            "steps",
-            "step",
-            "Step",
-            "steps",
-            step_stub(name),
-        ),
-        "provider" => create_piece(
-            name,
-            check,
-            "providers",
-            "provider",
-            "Provider",
-            "providers",
-            provider_stub(name),
-        ),
-        "module" => create_module(name, check),
-        other => Err(Error::new(
+    if kind == "module" {
+        return create_module(name, check);
+    }
+    match PIECES.iter().find(|p| p.kind == kind) {
+        Some(piece) => create_piece(name, check, piece),
+        None => Err(Error::new(
             ErrorKind::InvalidInput,
-            format!("unknown kind {other}"),
+            format!("unknown kind {kind} (try: {})", kinds().join(", ")),
         )),
     }
 }
 
 /// Writes a piece file under `src/<subdir>/` and wires it into the `@Module`
-/// in `src/app.module.ts` (`module_key` array). Emit-only + hint on failure.
-#[allow(clippy::too_many_arguments)]
-fn create_piece(
-    name: &str,
-    check: bool,
-    subdir: &str,
-    ext: &str,
-    suffix: &str,
-    module_key: &str,
-    stub: String,
-) -> std::io::Result<()> {
+/// in `src/app.module.ts`. Emit-only + hint on failure.
+fn create_piece(name: &str, check: bool, piece: &Piece) -> std::io::Result<()> {
+    let Piece {
+        subdir,
+        ext,
+        suffix,
+        ..
+    } = *piece;
+    let module_key = subdir;
     let lower = name.to_lowercase();
     let file = Path::new("src")
         .join(subdir)
         .join(format!("{lower}.{ext}.ts"));
     std::fs::create_dir_all(file.parent().unwrap())?;
-    std::fs::write(&file, stub)?;
+    std::fs::write(&file, (piece.stub)(name))?;
     println!("✓ {}", file.display());
 
     let symbol = format!("{name}{suffix}");
@@ -86,7 +111,7 @@ fn create_piece(
 }
 
 /// Writes `src/<name>.module.ts` and registers it in the `createApp({ modules })`
-/// call in `src/main.ts`. Emit-only + hint on failure.
+/// call in the project's entry file. Emit-only + hint on failure.
 fn create_module(name: &str, check: bool) -> std::io::Result<()> {
     let lower = name.to_lowercase();
     let file = Path::new("src").join(format!("{lower}.module.ts"));
@@ -96,20 +121,23 @@ fn create_module(name: &str, check: bool) -> std::io::Result<()> {
 
     let symbol = format!("{name}Module");
     let from = format!("./{lower}.module");
-    let main_path = Path::new("src/main.ts");
-    if !main_path.exists() {
-        println!("→ register {symbol} in createApp({{ modules }}) manually (no src/main.ts found)");
+    let Some(entry_path) = entry::find(Path::new(".")) else {
+        println!(
+            "→ register {symbol} in createApp({{ modules }}) manually (no {} found)",
+            entry::candidates()
+        );
         return maybe_check(check);
-    }
-    let src = std::fs::read_to_string(main_path)?;
+    };
+    let src = std::fs::read_to_string(&entry_path)?;
     let imported = wire::add_import(&src, &symbol, &from);
     match wire::add_to_createapp_modules(&imported, &symbol) {
         Some(wired) => {
-            std::fs::write(main_path, wired)?;
+            std::fs::write(&entry_path, wired)?;
             println!("✓ registered {symbol} in createApp");
         }
         None => println!(
-            "→ could not auto-register; add {symbol} to createApp modules[] in src/main.ts"
+            "→ could not auto-register; add {symbol} to createApp modules[] in {}",
+            entry_path.display()
         ),
     }
     maybe_check(check)

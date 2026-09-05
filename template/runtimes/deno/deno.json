@@ -1,6 +1,6 @@
 {
-  "compilerOptions": { "experimentalDecorators": true },
+  "compilerOptions": { "experimentalDecorators": true, "emitDecoratorMetadata": true },
   "unstable": ["sloppy-imports"],
-  "imports": { "@green-tea/core": "npm:@green-tea/core@^26.7.0-beta.0" },
+  "imports": { "@green-tea/core": "jsr:@green-tea/core@{{core_version}}" },
   "tasks": { "dev": "deno run --watch --allow-net --allow-read --allow-env src/main.ts" }
 }

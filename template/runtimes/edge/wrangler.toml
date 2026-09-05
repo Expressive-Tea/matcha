@@ -1,0 +1,13 @@
+name = "{{project_name}}"
+main = "src/main.ts"
+compatibility_date = "2024-11-01"
+# green-tea reaches node builtins on every runtime that has them; workerd only
+# provides them behind this flag.
+compatibility_flags = ["nodejs_compat"]
+
+# The edge has no filesystem, so @Html('public/index.html') cannot serve the
+# starter page the way it does on node, deno and bun. Wrangler serves ./public
+# itself and hands the worker everything it does not match — so '/' is the same
+# page and '/zen' is the same stream.
+[assets]
+directory = "./public"

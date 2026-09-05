@@ -1,4 +1,7 @@
+use clap::builder::PossibleValuesParser;
 use clap::{Parser, Subcommand};
+
+use crate::{cmd_add, cmd_create};
 
 #[derive(Parser)]
 #[command(name = "matcha", version, about = "green-tea CLI")]
@@ -14,22 +17,60 @@ pub enum Command {
         name: String,
         #[arg(long)]
         template_url: Option<String>,
-        #[arg(long, default_value = "node", value_parser = ["node", "deno", "bun"])]
+        #[arg(long, default_value = "node", value_parser = ["node", "deno", "bun", "edge"])]
         runtime: String,
     },
     /// Detect the runtime and run the project in watch mode
     Run,
     /// Generate a piece and auto-wire it into the module
     Create {
-        #[arg(value_parser = ["module", "controller", "step", "provider"])]
+        #[arg(value_parser = PossibleValuesParser::new(cmd_create::kinds()))]
         kind: String,
         name: String,
         #[arg(long)]
         check: bool,
     },
+    /// Check the project for the misconfigurations that fail confusingly
+    Doctor,
+    /// Print the dependency graph (Mermaid, DOT, or JSON)
+    Graph {
+        #[arg(long, default_value = "mermaid", value_parser = ["mermaid", "dot", "json"])]
+        format: String,
+        /// Entry file exporting `app` (default: src/app.ts, then src/main.ts)
+        #[arg(long)]
+        entry: Option<String>,
+        /// Write to this file instead of stdout
+        #[arg(long)]
+        out: Option<String>,
+    },
+    /// Print the structural OpenAPI 3.1 document for the route table
+    Openapi {
+        /// API title (default: core's own)
+        #[arg(long)]
+        title: Option<String>,
+        /// API version (default: core's own)
+        #[arg(long)]
+        api_version: Option<String>,
+        #[arg(long)]
+        entry: Option<String>,
+        #[arg(long)]
+        out: Option<String>,
+    },
+    /// Explain one route's chain, in execution order
+    Explain {
+        /// The route pattern as declared, e.g. /users/:id
+        route: String,
+        #[arg(long)]
+        entry: Option<String>,
+        #[arg(long)]
+        out: Option<String>,
+    },
     /// Add a capability to a controller
     Add {
-        #[arg(value_parser = ["sse", "stream", "buffer"])]
+        #[arg(value_parser = PossibleValuesParser::new(cmd_add::names()))]
         capability: String,
+        /// Which controller to edit (default: the only one in src/controllers)
+        #[arg(long)]
+        controller: Option<String>,
     },
 }

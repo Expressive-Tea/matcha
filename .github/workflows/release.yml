@@ -46,6 +46,8 @@ jobs:
             os: macos-14
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -55,15 +57,68 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
-      - name: Add target + musl tooling
-        run: |
-          rustup target add ${{ matrix.target }}
-          if [ "${{ matrix.target }}" = "x86_64-unknown-linux-musl" ]; then
-            sudo apt-get update && sudo apt-get install -y musl-tools
-          fi
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
 
-      - name: Build
+      # Both Linux targets go through zig rather than through apt's musl-tools.
+      # `tree-sitter` and `tree-sitter-typescript` compile C with the `cc` crate,
+      # so `rustup target add` alone cannot produce an aarch64 binary — a real
+      # cross C toolchain is required, and Ubuntu ships none for aarch64 musl.
+      # zig is one, for both arches, which is also why the x86_64 leg moved onto
+      # it: one toolchain for Linux beats a working one plus a second one.
+      - name: Install zig cross toolchain
+        if: contains(matrix.target, 'linux')
+        run: |
+          # `--break-system-packages` is required from pip 23 (PEP 668) and is an
+          # unknown flag before it, so try the plain form first.
+          python3 -m pip install --user ziglang \
+            || python3 -m pip install --user --break-system-packages ziglang
+          cargo install --locked cargo-zigbuild
+
+      - name: Build (Linux, cross via zig)
+        if: contains(matrix.target, 'linux')
+        run: cargo zigbuild --release --locked --target ${{ matrix.target }}
+
+      - name: Build (macOS)
+        if: contains(matrix.target, 'darwin')
         run: cargo build --release --locked --target ${{ matrix.target }}
+
+      # Run the artifact wherever the runner can actually execute it, and say so
+      # where it cannot. A binary that links and will not start is the failure a
+      # release pipeline must not leave for a user's terminal to find.
+      #
+      # A matching architecture always can. An x86_64 macOS binary on the arm64
+      # macOS runners can too — through Rosetta, which is a system component
+      # shared by every user on the host, so the runner account inherits it. It
+      # is probed rather than assumed: a hosted runner may not have it, and a
+      # smoke that hard-failed there would block a release over the runner's
+      # configuration rather than over the binary.
+      #
+      # Across the two forges that leaves nothing unexecuted. Gitea's
+      # `ubuntu-latest` is arm64 Linux (containers in a colima VM on the macOS
+      # host), so it runs the aarch64 binary; GitHub's is x86_64 and runs the
+      # other. Both macOS binaries run on either forge's arm64 macOS runner.
+      - name: Smoke the binary
+        shell: bash
+        run: |
+          target='${{ matrix.target }}'
+          arch='${{ runner.arch }}'
+          bin="./target/$target/release/matcha"
+          runnable=no
+          case "$target:$arch" in
+            aarch64-*:ARM64|x86_64-*:X64) runnable=yes ;;
+            x86_64-apple-darwin:ARM64)
+              # An `if` rather than `[ … ] && …`: under `set -e` the AND-list's
+              # failure is the case branch's exit status, and whether that ends
+              # the step is a subtlety of the shell rather than a decision. A
+              # missing Rosetta must skip the smoke, never fail the release.
+              if [ -d /Library/Apple/usr/libexec/oah ]; then runnable=yes; fi ;;
+          esac
+          if [ "$runnable" = yes ]; then
+            "$bin" --version
+          else
+            echo "::notice::smoke skipped: this $arch runner cannot execute $target"
+          fi
 
       - name: Package
         run: |
@@ -78,9 +133,44 @@ jobs:
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
+          # A tag with a hyphen is a prerelease (26.9.0-beta.1). Unflagged, it
+          # would answer /releases/latest — which is what install.sh resolves
+          # with no MATCHA_VERSION — so the first stable release would be
+          # displaced by the next beta published after it.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
             matcha-${{ matrix.target }}.tar.gz
             matcha-${{ matrix.target }}.tar.gz.sha256
+
+  # Guarantees the arm64 Linux binary is executed before it reaches anyone.
+  #
+  # The `Smoke the binary` step above runs each artifact only where the runner
+  # can, which depends on what `ubuntu-latest` resolves to on the forge that
+  # fired — so whether the aarch64 Linux binary gets started is a property of the
+  # runner pool rather than of the pipeline. This job removes that dependency:
+  # it pins an arm64 Linux runner, so the answer is the same on every release.
+  #
+  # GitHub offers such runners and Gitea does not, and a job pinned to a label a
+  # forge lacks would queue there forever — hence the same `server_url` guard
+  # `publish-crate` below already uses, which skips the job before a runner is
+  # ever looked for.
+  #
+  # It goes through `install.sh` rather than running the binary directly, so the
+  # same job also covers the installer's arm64 branch and its checksum
+  # verification against the release assets exactly as a user receives them.
+  verify-linux-arm64:
+    needs: build
+    if: ${{ github.server_url == 'https://github.com' }}
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the published arm64 binary and run it
+        run: |
+          set -eu
+          test "$(uname -m)" = aarch64 || { echo "expected an arm64 runner, got $(uname -m)"; exit 1; }
+          MATCHA_VERSION="$GITHUB_REF_NAME" MATCHA_INSTALL_DIR="$PWD/.bin" sh ./install.sh
+          "$PWD/.bin/matcha" --version
+          "$PWD/.bin/matcha" --help > /dev/null
 
   # crates.io = production only.
   # crates.io = production only, via OIDC Trusted Publishing (no CARGO_TOKEN).
