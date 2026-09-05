@@ -81,6 +81,42 @@ console.log(lines.join('\n'));"#
     emit(dir, entry_override, out, &body)
 }
 
+/// `matcha openapi` — the structural OpenAPI 3.1 document for the route table.
+///
+/// Structural is the honest word for it: green-tea derives paths, methods and
+/// parameters from the decorators, which is everything the graph knows. It does
+/// not invent response schemas, so what comes out describes the surface rather
+/// than the payloads.
+pub fn openapi(
+    dir: &Path,
+    title: Option<&str>,
+    version: Option<&str>,
+    entry_override: Option<&str>,
+    out: Option<&str>,
+) -> std::io::Result<()> {
+    // `app.openapi()` takes an optional info object; passing nothing lets core
+    // apply its own defaults rather than having the CLI invent a title.
+    let info = match (title, version) {
+        (None, None) => String::new(),
+        (t, v) => {
+            let mut fields = Vec::new();
+            if let Some(t) = t {
+                fields.push(format!("title: {}", js_string(t)));
+            }
+            if let Some(v) = v {
+                fields.push(format!("version: {}", js_string(v)));
+            }
+            format!("{{ {} }}", fields.join(", "))
+        }
+    };
+    emit(
+        dir,
+        entry_override,
+        out,
+        &format!("console.log(JSON.stringify(app.openapi({info}), null, 2));"),
+    )
+}
+
 /// Resolves the entry, generates the script around `body`, runs it under the
 /// detected runtime, and routes its stdout to a file or to ours.
 fn emit(

@@ -1,4 +1,7 @@
+use clap::builder::PossibleValuesParser;
 use clap::{Parser, Subcommand};
+
+use crate::{cmd_add, cmd_create};
 
 #[derive(Parser)]
 #[command(name = "matcha", version, about = "green-tea CLI")]
@@ -21,7 +24,7 @@ pub enum Command {
     Run,
     /// Generate a piece and auto-wire it into the module
     Create {
-        #[arg(value_parser = ["module", "controller", "step", "provider"])]
+        #[arg(value_parser = PossibleValuesParser::new(cmd_create::kinds()))]
         kind: String,
         name: String,
         #[arg(long)]
@@ -40,6 +43,19 @@ pub enum Command {
         #[arg(long)]
         out: Option<String>,
     },
+    /// Print the structural OpenAPI 3.1 document for the route table
+    Openapi {
+        /// API title (default: core's own)
+        #[arg(long)]
+        title: Option<String>,
+        /// API version (default: core's own)
+        #[arg(long)]
+        api_version: Option<String>,
+        #[arg(long)]
+        entry: Option<String>,
+        #[arg(long)]
+        out: Option<String>,
+    },
     /// Explain one route's chain, in execution order
     Explain {
         /// The route pattern as declared, e.g. /users/:id
@@ -51,7 +67,7 @@ pub enum Command {
     },
     /// Add a capability to a controller
     Add {
-        #[arg(value_parser = ["sse", "stream", "buffer", "ws", "upload"])]
+        #[arg(value_parser = PossibleValuesParser::new(cmd_add::names()))]
         capability: String,
         /// Which controller to edit (default: the only one in src/controllers)
         #[arg(long)]

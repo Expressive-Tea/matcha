@@ -58,3 +58,18 @@ fn graph_rejects_an_unknown_format() {
         .assert()
         .failure();
 }
+
+/// openapi shares graph's entry resolution, so it shares its failure modes —
+/// including the one that has to name the fix.
+#[test]
+fn openapi_without_an_entry_says_what_is_missing() {
+    let d = tempdir().unwrap();
+    std::fs::write(d.path().join("package.json"), "{}").unwrap();
+    Command::cargo_bin("matcha")
+        .unwrap()
+        .current_dir(d.path())
+        .arg("openapi")
+        .assert()
+        .failure()
+        .stderr(contains("--entry"));
+}

@@ -56,6 +56,23 @@ fn main() {
                 std::process::exit(1);
             }
         }
+        Command::Openapi {
+            title,
+            api_version,
+            entry,
+            out,
+        } => {
+            if let Err(e) = cmd_graph::openapi(
+                std::path::Path::new("."),
+                title.as_deref(),
+                api_version.as_deref(),
+                entry.as_deref(),
+                out.as_deref(),
+            ) {
+                eprintln!("error: {e}");
+                std::process::exit(1);
+            }
+        }
         Command::Explain { route, entry, out } => {
             if let Err(e) = cmd_graph::explain(
                 std::path::Path::new("."),

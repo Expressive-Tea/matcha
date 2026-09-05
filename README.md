@@ -39,6 +39,7 @@ matcha create controller Users             # generate + auto-wire into @Module
 matcha add sse                             # add a capability to your controller
 matcha graph                               # draw the dependency graph
 matcha explain /users/:id                  # one route's chain, in execution order
+matcha openapi                             # structural OpenAPI 3.1 for the route table
 matcha doctor                              # check the project for confusing misconfigurations
 ```
 
@@ -71,7 +72,12 @@ matcha graph --format dot           # Graphviz
 matcha graph --format json          # the raw GraphView
 matcha graph --out docs/graph.mmd   # to a file instead of stdout
 matcha explain /users/:id           # providers → steps → handler, with needs/provides
+matcha openapi --title "My API" --api-version 1.0.0 --out openapi.json
 ```
+
+`openapi` is *structural*: green-tea derives paths, methods and parameters from
+the decorators, which is everything the graph knows. It does not invent response
+schemas, so the document describes the surface rather than the payloads.
 
 Both import `src/app.ts` (override with `--entry`) and call `app.ready()`, which
 resolves the graph and deliberately does **not** run provider factories — asking

@@ -86,7 +86,8 @@ echo "▸ matcha graph"
 "$MATCHA" graph | grep -q '^flowchart LR' || { echo "graph produced no mermaid"; exit 1; }
 "$MATCHA" graph --format dot | grep -q '^digraph green_tea' || { echo "graph produced no DOT"; exit 1; }
 "$MATCHA" explain /zen | grep -q '\[sse\]' || { echo "explain did not report the sse route"; exit 1; }
-echo "✓ graph and explain resolve"
+"$MATCHA" openapi | grep -q '"openapi": "3.1.0"' || { echo "openapi produced no document"; exit 1; }
+echo "✓ graph, explain and openapi resolve"
 
 # Every `matcha add` capability, spliced into one controller and type-checked
 # together. The stubs name core's real surface — `sse()` with an id, `@Ws` with
