@@ -154,7 +154,8 @@ the alias can go once that is fixed.
 ```bash
 cargo test                          # unit + CLI integration
 scripts/starter-smoke.sh node       # scaffold, install, type-check, boot, introspect
-scripts/starter-smoke.sh deno       # (also bun) — needs that runtime installed
+scripts/starter-smoke.sh deno       # (also bun, edge) — needs that runtime installed
+./test_install.sh                   # install.sh against a file:// fixture, no network
 ```
 
 `starter-smoke.sh` is the check that `cargo test` cannot be: `cargo test` proves

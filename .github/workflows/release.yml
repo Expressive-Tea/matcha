@@ -78,6 +78,11 @@ jobs:
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
+          # A tag with a hyphen is a prerelease (26.9.0-beta.1). Unflagged, it
+          # would answer /releases/latest — which is what install.sh resolves
+          # with no MATCHA_VERSION — so the first stable release would be
+          # displaced by the next beta published after it.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
             matcha-${{ matrix.target }}.tar.gz
             matcha-${{ matrix.target }}.tar.gz.sha256

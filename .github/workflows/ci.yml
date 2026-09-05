@@ -75,3 +75,19 @@ jobs:
             echo "Bump CORE_VERSION in src/template.rs and let the starter job prove it still boots."
             exit 1
           fi
+
+  # install.sh has had a test since the installer landed, and no workflow ever
+  # ran it. It exercises the script against a file:// fixture — no network — and
+  # checks both halves that matter: a good archive installs, and a bad checksum
+  # aborts without leaving a binary behind.
+  installer:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+      - run: shellcheck install.sh test_install.sh
+        if: matrix.os == 'ubuntu-latest'
+      - run: ./test_install.sh

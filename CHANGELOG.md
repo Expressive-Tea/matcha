@@ -104,6 +104,24 @@ is pinned to is `CORE_VERSION` in `src/template.rs`, and each entry below says w
   was `TS2868: Cannot find name 'Bun'` — meaning `tsc --noEmit`, and therefore
   `matcha create --check`, failed on every bun project the CLI has ever scaffolded.
 
+- **`install.sh` resolves `latest` without the release API.** The API is rate-limited to
+  60 requests an hour per IP unauthenticated — an office behind one NAT or a CI runner
+  burns through it — and a throttled response carries no `tag_name`, so the installer
+  failed with "could not resolve latest release tag" and no hint of the cause. It now
+  follows the `/releases/latest` redirect, which has no such limit and which Gitea
+  implements the same way, keeping the API as the fallback for the wget path. The error
+  that remains names the rate limit and points at `MATCHA_VERSION`.
+
+- **A beta release is flagged as a prerelease.** Nothing set the flag, so every beta
+  answered `/releases/latest` — which is what `install.sh` resolves when no
+  `MATCHA_VERSION` is given. Harmless while every release is a beta, and wrong the moment
+  a stable one exists: the next beta published after it would displace it for everyone
+  installing with the default.
+
+- **CI runs `test_install.sh`.** It has existed since the installer landed and no workflow
+  ever ran it. It now runs on Linux and macOS, with `shellcheck` alongside, and covers a
+  third case: an unresolvable `latest` must explain itself and install nothing.
+
 - **`MIT` is a file, not just a manifest field.** `Cargo.toml` declared `license = "MIT"` and
   the published crate carried no license text. Added along with the `DCO` the README has been
   requiring sign-off against, and a `CONTRIBUTING.md` saying how.
