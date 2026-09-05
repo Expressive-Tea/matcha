@@ -193,7 +193,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_PROMOTE_TOKEN }}
         run: |
           git remote add github "https://x-access-token:${GH_TOKEN}@github.com/Expressive-Tea/matcha.git"
-          git push github "refs/tags/$GITHUB_REF_NAME"
+          # `${{ github.ref_name }}` rather than $GITHUB_REF_NAME: the expression
+          # is what promote.yml used to hand v26.8.0-beta.0 to GitHub, so it is
+          # proven on this act_runner. Whether the env var is exported here is
+          # not, and getting it wrong would push an empty ref and leave the tag
+          # on this forge alone.
+          git push github "refs/tags/${{ github.ref_name }}"
 
   # crates.io = production only.
   # crates.io = production only, via OIDC Trusted Publishing (no CARGO_TOKEN).
