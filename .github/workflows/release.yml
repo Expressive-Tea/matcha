@@ -172,6 +172,29 @@ jobs:
           "$PWD/.bin/matcha" --version
           "$PWD/.bin/matcha" --help > /dev/null
 
+  # Gitea only: hand the tag to GitHub, but only once this forge has built all
+  # four targets and run every artifact it can.
+  #
+  # This is the gate. Pushing the tag is what starts GitHub's release and, with
+  # it, the crates.io publish — and crates.io has no unpublish, only yank. So the
+  # local build is not a parallel opinion, it is the thing that has to pass
+  # first. `needs: build` is what makes the two sequential; when both workflows
+  # fired on the same tag push they were not.
+  promote-tag:
+    needs: build
+    if: ${{ github.server_url != 'https://github.com' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Push the tag to GitHub
+        env:
+          GH_TOKEN: ${{ secrets.GH_PROMOTE_TOKEN }}
+        run: |
+          git remote add github "https://x-access-token:${GH_TOKEN}@github.com/Expressive-Tea/matcha.git"
+          git push github "refs/tags/$GITHUB_REF_NAME"
+
   # crates.io = production only.
   # crates.io = production only, via OIDC Trusted Publishing (no CARGO_TOKEN).
   # Requires a trusted publisher configured on crates.io (Expressive-Tea/matcha, release.yml).
