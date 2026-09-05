@@ -167,7 +167,10 @@ fn run(rt: Runtime, dir: &Path, script: &str) -> std::io::Result<std::process::O
 fn runner(rt: Runtime, script: &str) -> (&'static str, Vec<String>) {
     let s = script.to_string();
     match rt {
-        Runtime::Node => ("npx", vec!["tsx".into(), s]),
+        // Edge resolves its graph under node: `src/app.ts` imports core, never
+        // `edgeHandler`, so nothing here needs workerd — and workerd could not
+        // print to a terminal anyway.
+        Runtime::Node | Runtime::Edge => ("npx", vec!["tsx".into(), s]),
         // `ready()` opens no provider connections, but a mesh app does reach its
         // teapots there, so net is part of resolving the graph rather than extra.
         Runtime::Deno => (

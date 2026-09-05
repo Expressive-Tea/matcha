@@ -20,12 +20,14 @@ pub static SHARED: Dir = include_dir!("$CARGO_MANIFEST_DIR/template/shared");
 pub static RUNTIME_DENO: Dir = include_dir!("$CARGO_MANIFEST_DIR/template/runtimes/deno");
 pub static RUNTIME_NODE: Dir = include_dir!("$CARGO_MANIFEST_DIR/template/runtimes/node");
 pub static RUNTIME_BUN: Dir = include_dir!("$CARGO_MANIFEST_DIR/template/runtimes/bun");
+pub static RUNTIME_EDGE: Dir = include_dir!("$CARGO_MANIFEST_DIR/template/runtimes/edge");
 
 fn overlay_for(runtime: Runtime) -> &'static Dir<'static> {
     match runtime {
         Runtime::Deno => &RUNTIME_DENO,
         Runtime::Node => &RUNTIME_NODE,
         Runtime::Bun => &RUNTIME_BUN,
+        Runtime::Edge => &RUNTIME_EDGE,
     }
 }
 
@@ -72,7 +74,7 @@ mod tests {
     /// import the former; breaking the split breaks both.
     #[test]
     fn every_runtime_exports_the_app_from_its_own_module() {
-        for rt in [Runtime::Node, Runtime::Deno, Runtime::Bun] {
+        for rt in [Runtime::Node, Runtime::Deno, Runtime::Bun, Runtime::Edge] {
             let d = tempdir().unwrap();
             write_starter(d.path(), "my-api", rt).unwrap();
 
@@ -100,7 +102,7 @@ mod tests {
     /// may carry a range.
     #[test]
     fn no_runtime_scaffolds_a_caret_range_for_core() {
-        for rt in [Runtime::Node, Runtime::Deno, Runtime::Bun] {
+        for rt in [Runtime::Node, Runtime::Deno, Runtime::Bun, Runtime::Edge] {
             let d = tempdir().unwrap();
             write_starter(d.path(), "my-api", rt).unwrap();
 

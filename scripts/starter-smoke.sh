@@ -11,7 +11,7 @@
 # Usage: scripts/starter-smoke.sh <node|deno|bun>
 set -euo pipefail
 
-RUNTIME="${1:?usage: starter-smoke.sh <node|deno|bun>}"
+RUNTIME="${1:?usage: starter-smoke.sh <node|deno|bun|edge>}"
 MATCHA="${MATCHA:-$PWD/target/debug/matcha}"
 [ -x "$MATCHA" ] || { echo "no matcha binary at $MATCHA (cargo build first)" >&2; exit 2; }
 
@@ -19,6 +19,7 @@ case "$RUNTIME" in
   node) TEMPLATE_PORT=3000; INSTALL=(npm install); CHECK=(npx --yes tsc --noEmit) ;;
   deno) TEMPLATE_PORT=8000; INSTALL=(deno install); CHECK=(deno check src/main.ts) ;;
   bun)  TEMPLATE_PORT=8000; INSTALL=(bun install);  CHECK=(bunx --bun tsc --noEmit) ;;
+  edge) TEMPLATE_PORT=8787; INSTALL=(npm install); CHECK=(npx --yes tsc --noEmit) ;;
   *) echo "unknown runtime: $RUNTIME" >&2; exit 2 ;;
 esac
 
@@ -39,7 +40,13 @@ cd "$WORK"
 echo "▸ matcha new demo --runtime $RUNTIME"
 "$MATCHA" new demo --runtime "$RUNTIME"
 cd demo
-sed -i.bak "s/$TEMPLATE_PORT/$PORT/g" src/main.ts && rm -f src/main.ts.bak
+if [ "$RUNTIME" = edge ]; then
+  # The edge starter's port is wrangler's, not the app's — src/main.ts only
+  # exports a fetch handler.
+  printf '\n[dev]\nport = %s\n' "$PORT" >> wrangler.toml
+else
+  sed -i.bak "s/$TEMPLATE_PORT/$PORT/g" src/main.ts && rm -f src/main.ts.bak
+fi
 
 echo "▸ ${INSTALL[*]}"
 "${INSTALL[@]}"
@@ -57,6 +64,8 @@ done
 
 # The starter's two halves: the @Html page, and the @Sse stream that is the
 # reason the starter is alive rather than a JSON hello.
+# On edge, `/` is answered by wrangler's [assets] rather than by the worker —
+# the page is the same one, from the same public/index.html.
 code=$(curl -fsS -o /dev/null -w '%{http_code}' "http://localhost:$PORT/" 2>/dev/null || echo 000)
 [ "$code" = 200 ] || { echo "GET / returned $code"; echo '--- server log ---'; cat "$WORK/server.log"; exit 1; }
 # Read one frame and stop. `head -1` closing the pipe kills curl with SIGPIPE,

@@ -14,7 +14,7 @@ pub enum Command {
         name: String,
         #[arg(long)]
         template_url: Option<String>,
-        #[arg(long, default_value = "node", value_parser = ["node", "deno", "bun"])]
+        #[arg(long, default_value = "node", value_parser = ["node", "deno", "bun", "edge"])]
         runtime: String,
     },
     /// Detect the runtime and run the project in watch mode
@@ -27,6 +27,8 @@ pub enum Command {
         #[arg(long)]
         check: bool,
     },
+    /// Check the project for the misconfigurations that fail confusingly
+    Doctor,
     /// Print the dependency graph (Mermaid, DOT, or JSON)
     Graph {
         #[arg(long, default_value = "mermaid", value_parser = ["mermaid", "dot", "json"])]

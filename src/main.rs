@@ -2,6 +2,7 @@ mod check;
 mod cli;
 mod cmd_add;
 mod cmd_create;
+mod cmd_doctor;
 mod cmd_graph;
 mod cmd_new;
 mod cmd_run;
@@ -34,6 +35,12 @@ fn main() {
         }
         Command::Create { kind, name, check } => {
             if let Err(e) = cmd_create::run(&kind, &name, check) {
+                eprintln!("error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Command::Doctor => {
+            if let Err(e) = cmd_doctor::run(std::path::Path::new(".")) {
                 eprintln!("error: {e}");
                 std::process::exit(1);
             }

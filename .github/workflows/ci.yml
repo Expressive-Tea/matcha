@@ -36,7 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runtime: [node, deno, bun]
+        runtime: [node, deno, bun, edge]
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust

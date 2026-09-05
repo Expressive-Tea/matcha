@@ -8,6 +8,9 @@ fn command_for(rt: Runtime) -> (&'static str, Vec<&'static str>) {
         Runtime::Deno => ("deno", vec!["task", "dev"]),
         Runtime::Bun => ("bun", vec!["run", "dev"]),
         Runtime::Node => ("npm", vec!["run", "dev"]),
+        // The scaffold's `dev` script is `wrangler dev`, which boots real
+        // workerd locally — so edge is a `matcha run` target after all.
+        Runtime::Edge => ("npm", vec!["run", "dev"]),
     }
 }
 
@@ -39,6 +42,10 @@ mod tests {
     #[test]
     fn bun_watch() {
         assert_eq!(command_for(Runtime::Bun), ("bun", vec!["run", "dev"]));
+    }
+    #[test]
+    fn edge_runs_wrangler_through_the_dev_script() {
+        assert_eq!(command_for(Runtime::Edge), ("npm", vec!["run", "dev"]));
     }
     #[test]
     fn node_watch() {

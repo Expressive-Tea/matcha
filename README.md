@@ -39,6 +39,7 @@ matcha create controller Users             # generate + auto-wire into @Module
 matcha add sse                             # add a capability to your controller
 matcha graph                               # draw the dependency graph
 matcha explain /users/:id                  # one route's chain, in execution order
+matcha doctor                              # check the project for confusing misconfigurations
 ```
 
 ### The starter
@@ -102,16 +103,45 @@ and wire pieces into the right `@Module` array or controller. Edits are
 idempotent and revert themselves if they would break the file's syntax. Pass
 `--check` to `create` to type-check with your project's runtime afterward.
 
+### `matcha doctor`
+
+The checks whose failures are confusing rather than loud: `experimentalDecorators`
+missing (every `@Route` becomes a syntax error, and the message blames the
+decorator), a core pin that cannot resolve, an installed version that does not
+match the manifest, an entry that does not export `app`, and `@Ws`/multipart
+routes whose optional peer dependency is not installed — core lazy-loads `ws`
+and `busboy`, so those compile and fail at the first request instead.
+
+Every check is a file read: no runtime is spawned and nothing is fetched, so it
+works before the project installs. Exits non-zero on a `✗`.
+
 ## Runtime detection
 
 `matcha run` picks the runtime by precedence, first match wins:
 
-1. `matcha.toml` — `runtime = "node" | "deno" | "bun"`
-2. `deno.json` / `deno.jsonc` → **deno**
-3. `bun.lockb` / `bun.lock` → **bun**
-4. `package.json` → **node**
+1. `matcha.toml` — `runtime = "node" | "deno" | "bun" | "edge"`
+2. `wrangler.toml` / `wrangler.jsonc` → **edge**
+3. `deno.json` / `deno.jsonc` → **deno**
+4. `bun.lockb` / `bun.lock` → **bun**
+5. `package.json` → **node**
 
-Edge is a deploy target, not a `matcha run` target.
+`wrangler.toml` is checked before `package.json` because an edge project has both.
+
+### Edge
+
+`matcha new my-api --runtime edge` scaffolds a Cloudflare Worker: `wrangler.toml`
+with `nodejs_compat`, `edgeHandler(app)` as the default export, and wrangler's
+`[assets]` serving `./public` — so `/` is the same page as on the other runtimes
+and `/zen` is the same stream, from the worker. `matcha run` is `wrangler dev`,
+which boots real workerd locally.
+
+Two differences the edge cannot hide. `@Html('file')`, `static` and multipart
+uploads need a filesystem workerd does not have, and shutdown teardown never
+runs — an isolate is discarded, not closed. And core is installed from **JSR**
+here rather than npm: the npm ESM build carries a `createRequire(import.meta.url)`
+banner that throws at load on workerd. The scaffolded `.npmrc` says so and links
+[the issue](https://github.com/Expressive-Tea/green-tea/issues/93); both it and
+the alias can go once that is fixed.
 
 ## Development
 
