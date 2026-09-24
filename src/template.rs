@@ -14,7 +14,7 @@ use crate::runtime::Runtime;
 /// reaches a stable major this becomes a range (`^27`) and the exactness stops
 /// mattering; until then the `core-freshness` CI job fails when this falls
 /// behind the `beta` dist-tag, which is what keeps it current.
-pub const CORE_VERSION: &str = "26.9.0-beta.1";
+pub const CORE_VERSION: &str = "26.9.0-beta.2";
 
 pub static SHARED: Dir = include_dir!("$CARGO_MANIFEST_DIR/template/shared");
 pub static RUNTIME_DENO: Dir = include_dir!("$CARGO_MANIFEST_DIR/template/runtimes/deno");
@@ -137,7 +137,10 @@ mod tests {
         assert!(d.path().join("deno.json").exists());
         assert!(d.path().join("matcha.toml").exists());
         let main = std::fs::read_to_string(d.path().join("src/main.ts")).unwrap();
-        assert!(main.contains("Deno.serve"));
+        // serveDeno boots before it binds; Deno.serve(app.fetch) bound first and
+        // left a port answering 500 when a provider failed.
+        assert!(main.contains("await serveDeno(app"));
+        assert!(!main.contains("Deno.serve("));
         assert!(!d.path().join("package.json").exists());
 
         let deno_json = std::fs::read_to_string(d.path().join("deno.json")).unwrap();
@@ -177,7 +180,9 @@ mod tests {
         assert!(pkg.contains("\"name\": \"my-api\""));
         assert!(!pkg.contains("{{project_name}}"));
         let main = std::fs::read_to_string(d.path().join("src/main.ts")).unwrap();
-        assert!(main.contains("Bun.serve"));
+        // Same reason as Deno: serveBun boots first.
+        assert!(main.contains("await serveBun(app"));
+        assert!(!main.contains("Bun.serve("));
         assert!(!d.path().join("deno.json").exists());
     }
 }
