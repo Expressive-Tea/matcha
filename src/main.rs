@@ -1,3 +1,4 @@
+mod ask;
 mod check;
 mod cli;
 mod cmd_add;
