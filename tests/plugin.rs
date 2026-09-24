@@ -409,3 +409,61 @@ fn in_app_refuses_a_factory_name_the_entry_already_uses() {
         );
     }
 }
+
+/// The scaffolded app.ts imports from '@green-tea/core' and './app.module'. Words inside those
+/// strings are not bindings, so `core`, `tea` and `module` are free names for a plugin.
+#[test]
+fn words_inside_strings_and_comments_are_not_collisions() {
+    let app = "import { createApp } from '@green-tea/core';\nimport { AppModule } from './app.module';\n\n// the green tea app\nexport const app = createApp({ modules: [AppModule] });\n";
+    for name in ["core", "tea", "module", "green"] {
+        let d = project(app);
+        matcha(d.path())
+            .args(["create", "plugin", name])
+            .assert()
+            .success();
+        assert!(
+            d.path().join(format!("plugins/{name}/index.ts")).exists(),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn package_engines_need_the_node_that_strips_types() {
+    let d = tempdir().unwrap();
+    matcha(d.path())
+        .args([
+            "create",
+            "plugin",
+            "algo",
+            "--package",
+            "p",
+            "--scope",
+            "acme",
+        ])
+        .assert()
+        .success();
+    let pj = std::fs::read_to_string(d.path().join("p/package.json")).unwrap();
+    // `node --test test/*.test.ts` needs unflagged type stripping, which is 22.18+.
+    assert!(pj.contains("\"node\": \">=22.18\""), "{pj}");
+}
+
+#[test]
+fn the_generated_test_asserts_the_token_is_in_the_graph() {
+    let d = tempdir().unwrap();
+    matcha(d.path())
+        .args([
+            "create",
+            "plugin",
+            "algo",
+            "--package",
+            "p",
+            "--scope",
+            "acme",
+        ])
+        .assert()
+        .success();
+    let t = std::fs::read_to_string(d.path().join("p/test/algo.test.ts")).unwrap();
+    assert!(t.contains("app.graph()"), "{t}");
+    assert!(t.contains("provides.includes('algo')"), "{t}");
+}

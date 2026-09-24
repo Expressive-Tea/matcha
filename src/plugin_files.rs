@@ -100,7 +100,7 @@ fn deno_json(p: &Package) -> String {
 }
 
 const ENGINES: &str = r#"  "engines": {
-    "node": ">=22",
+    "node": ">=22.18",
     "deno": ">=2",
     "bun": ">=1.3"
   },"#;
@@ -179,9 +179,10 @@ import {{ createApp }} from '@green-tea/core';
 
 import {{ {fun} }} from '../src/index.ts';
 
-test('mounts into an app, and the app boots', async () => {{
+test('mounts, boots, and puts its token in the graph', async () => {{
   const app = createApp({{ modules: [], plugins: [{fun}()] }});
   await app.boot();
+  assert.ok(app.graph().nodes.some((node) => node.provides.includes('{slug}')));
 }});
 
 test('two instances mount side by side under different tokens', async () => {{

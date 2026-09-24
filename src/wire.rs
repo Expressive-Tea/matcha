@@ -215,6 +215,27 @@ pub fn add_to_module_array(src: &str, key: &str, symbol: &str) -> Option<String>
     insert_into_object_array(src, object, key, symbol)
 }
 
+/// True when `ident` is an identifier anywhere in `src`: an import, a
+/// declaration or a use. Read from the parse tree, so a word inside a string
+/// (`'@green-tea/core'`) or a comment does not count; those are not bindings
+/// and cannot collide.
+pub fn binds(src: &str, ident: &str) -> bool {
+    fn visit(node: Node, src: &str, ident: &str) -> bool {
+        if matches!(
+            node.kind(),
+            "identifier" | "type_identifier" | "shorthand_property_identifier_pattern"
+        ) && node.utf8_text(src.as_bytes()).ok() == Some(ident)
+        {
+            return true;
+        }
+        let mut c = node.walk();
+        let found = node.children(&mut c).any(|child| visit(child, src, ident));
+        found
+    }
+    let tree = parser().parse(src, None).unwrap();
+    visit(tree.root_node(), src, ident)
+}
+
 /// Inserts `item` into the `key: [...]` array of the first `createApp(...)`
 /// call's argument object, creating the key if absent. `item` is any array
 /// element: a symbol for `modules`, a call like `algo()` for `plugins`.
@@ -452,6 +473,16 @@ fn find_module_object<'a>(root: &Node<'a>, src: &str) -> Option<Node<'a>> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn binds_sees_identifiers_not_strings_or_comments() {
+        let src = "import { createApp } from '@green-tea/core';\n// green tea\nexport const app = createApp({});\n";
+        assert!(binds(src, "createApp"));
+        assert!(binds(src, "app"));
+        assert!(!binds(src, "core"));
+        assert!(!binds(src, "green"));
+        assert!(!binds(src, "appModule"));
+    }
+
     use super::*;
 
     const MOD: &str = r#"import { Module } from '@green-tea/core';

@@ -96,7 +96,7 @@ fn in_app<R: BufRead, W: Write>(opts: Opts, ask: &mut Ask<R, W>, root: &Path) ->
     let src = std::fs::read_to_string(&entry_path)?;
     // A second binding of a name the entry already has is a SyntaxError, and it
     // would break the app rather than only the new plugin.
-    if naming::used_in(&src, &fun) {
+    if wire::binds(&src, &fun) {
         return Err(invalid(format!(
             "{} already uses `{fun}`, so the plugin's factory would collide with it; pick another name",
             entry_path.strip_prefix(root).unwrap_or(&entry_path).display()
@@ -193,17 +193,13 @@ fn package_mode<R: BufRead, W: Write>(
         Some(r) => r,
         None => {
             ask.say(&format!("\n{}\n", plugin_files::JSR_BANNER))?;
-            match ask
-                .text(
-                    "Publish to: (1) JSR only  (2) JSR + npm",
-                    Some("1"),
-                    "--registry",
-                )?
-                .as_str()
-            {
-                "2" | "both" => "both".to_string(),
-                _ => "jsr".to_string(),
-            }
+            ask.choice(
+                "Publish to: (1) JSR only [default]  (2) JSR + npm",
+                &[("1", "jsr"), ("2", "both")],
+                "jsr",
+                "--registry",
+            )?
+            .to_string()
         }
     };
 

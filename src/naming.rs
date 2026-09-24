@@ -110,16 +110,6 @@ pub fn is_reserved(ident: &str) -> bool {
     RESERVED.contains(&ident)
 }
 
-/// True when `ident` appears as a whole identifier anywhere in `src`.
-///
-/// ponytail: a token scan, not a parse, so a match inside a comment or a string
-/// also counts. That refuses a name that would have been fine, never the other
-/// way round; a scope-aware check is the upgrade if it ever gets in the way.
-pub fn used_in(src: &str, ident: &str) -> bool {
-    src.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$'))
-        .any(|token| token == ident)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -149,11 +139,6 @@ mod tests {
         assert!(is_reserved("delete"));
         assert!(is_reserved("class"));
         assert!(!is_reserved("pluginAlgo"));
-        let src = "import { createApp } from 'x';\nexport const app = createApp({});\n";
-        assert!(used_in(src, "createApp"));
-        assert!(used_in(src, "app"));
-        assert!(!used_in(src, "appModule"));
-        assert!(!used_in(src, "create"));
     }
 
     #[test]

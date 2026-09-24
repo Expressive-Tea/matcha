@@ -63,6 +63,32 @@ impl<R: BufRead, W: Write> Ask<R, W> {
         })
     }
 
+    /// One of `choices`, each `(key, value)`: the answer may be the key or the
+    /// value, and Enter takes `default`. Anything else is asked again. Quietly
+    /// taking the default would turn a typed `npm` into a JSR-only package.
+    pub fn choice(
+        &mut self,
+        question: &str,
+        choices: &[(&str, &'static str)],
+        default: &'static str,
+        flag: &str,
+    ) -> io::Result<&'static str> {
+        if !self.interactive {
+            return Ok(default);
+        }
+        let keys: Vec<&str> = choices.iter().map(|(k, _)| *k).collect();
+        loop {
+            let answer = self.line(question)?.to_lowercase();
+            if answer.is_empty() {
+                return Ok(default);
+            }
+            if let Some((_, v)) = choices.iter().find(|(k, v)| answer == *k || answer == *v) {
+                return Ok(v);
+            }
+            writeln!(self.output, "answer {} (or pass {flag})", keys.join(" or "))?;
+        }
+    }
+
     /// `flag` names what to pass instead, for the error off a TTY.
     pub fn text(
         &mut self,
@@ -143,6 +169,43 @@ mod tests {
     fn text_errors_on_eof() {
         let err = scripted("").text("Name?", None, "NAME").unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::UnexpectedEof);
+    }
+
+    #[test]
+    fn choice_asks_again_on_an_answer_that_is_not_offered() {
+        let mut ask = scripted("npm\n3\n2\n");
+        let picked = ask
+            .choice(
+                "Publish to:",
+                &[("1", "jsr"), ("2", "both")],
+                "jsr",
+                "--registry",
+            )
+            .unwrap();
+        assert_eq!(picked, "both");
+        let shown = String::from_utf8(ask.output.clone()).unwrap();
+        assert!(shown.contains("answer 1 or 2"), "{shown}");
+    }
+
+    #[test]
+    fn choice_takes_the_default_on_enter_and_off_a_tty() {
+        let choices = [("1", "jsr"), ("2", "both")];
+        assert_eq!(
+            scripted("\n")
+                .choice("P?", &choices, "jsr", "--registry")
+                .unwrap(),
+            "jsr"
+        );
+        assert_eq!(
+            scripted("both\n")
+                .choice("P?", &choices, "jsr", "--registry")
+                .unwrap(),
+            "both"
+        );
+        assert_eq!(
+            piped().choice("P?", &choices, "jsr", "--registry").unwrap(),
+            "jsr"
+        );
     }
 
     #[test]
