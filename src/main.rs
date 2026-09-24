@@ -7,6 +7,7 @@ mod cmd_graph;
 mod cmd_new;
 mod cmd_run;
 mod entry;
+mod naming;
 mod runtime;
 mod template;
 mod wire;
