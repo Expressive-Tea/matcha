@@ -353,3 +353,59 @@ fn package_rejects_a_bad_scope_or_npm_name() {
         .failure()
         .stderr(contains("npm name"));
 }
+
+#[test]
+fn a_name_whose_factory_would_be_a_reserved_word_writes_nothing() {
+    for name in ["delete", "class", "default", "new", "import"] {
+        let d = project(APP);
+        matcha(d.path())
+            .args(["create", "plugin", name])
+            .assert()
+            .failure()
+            .stderr(contains("reserved word"));
+        assert!(!d.path().join("plugins").exists(), "{name}");
+        assert_eq!(
+            std::fs::read_to_string(d.path().join("src/app.ts")).unwrap(),
+            APP
+        );
+    }
+}
+
+#[test]
+fn a_package_whose_factory_would_be_a_reserved_word_writes_nothing() {
+    let d = tempdir().unwrap();
+    matcha(d.path())
+        .args([
+            "create",
+            "plugin",
+            "delete",
+            "--package",
+            "p",
+            "--scope",
+            "acme",
+        ])
+        .assert()
+        .failure()
+        .stderr(contains("reserved word"));
+    assert!(!d.path().join("p").exists());
+}
+
+/// `create app` → `createApp`, and `app` → `app`: both already exist in the entry, and a second
+/// binding of the same name is a SyntaxError that would break the app, not just the plugin.
+#[test]
+fn in_app_refuses_a_factory_name_the_entry_already_uses() {
+    for name in ["create app", "app"] {
+        let d = project(APP);
+        matcha(d.path())
+            .args(["create", "plugin", name])
+            .assert()
+            .failure()
+            .stderr(contains("already"));
+        assert!(!d.path().join("plugins").exists(), "{name}");
+        assert_eq!(
+            std::fs::read_to_string(d.path().join("src/app.ts")).unwrap(),
+            APP,
+            "{name}"
+        );
+    }
+}

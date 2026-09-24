@@ -51,6 +51,75 @@ pub fn camel(slug: &str) -> String {
     first + &words.map(capitalised).collect::<String>()
 }
 
+/// Words that cannot name a function in a TypeScript module: JS keywords, the
+/// strict-mode reserved words (modules are always strict) and the literals.
+/// `camel` of a slug is lowercase-first, so only lowercase spellings matter.
+const RESERVED: &[&str] = &[
+    "arguments",
+    "await",
+    "break",
+    "case",
+    "catch",
+    "class",
+    "const",
+    "continue",
+    "debugger",
+    "default",
+    "delete",
+    "do",
+    "else",
+    "enum",
+    "eval",
+    "export",
+    "extends",
+    "false",
+    "finally",
+    "for",
+    "function",
+    "if",
+    "implements",
+    "import",
+    "in",
+    "instanceof",
+    "interface",
+    "let",
+    "new",
+    "null",
+    "package",
+    "private",
+    "protected",
+    "public",
+    "return",
+    "static",
+    "super",
+    "switch",
+    "this",
+    "throw",
+    "true",
+    "try",
+    "typeof",
+    "var",
+    "void",
+    "while",
+    "with",
+    "yield",
+];
+
+/// True when `ident` cannot be used as the factory's name.
+pub fn is_reserved(ident: &str) -> bool {
+    RESERVED.contains(&ident)
+}
+
+/// True when `ident` appears as a whole identifier anywhere in `src`.
+///
+/// ponytail: a token scan, not a parse, so a match inside a comment or a string
+/// also counts. That refuses a name that would have been fine, never the other
+/// way round; a scope-aware check is the upgrade if it ever gets in the way.
+pub fn used_in(src: &str, ident: &str) -> bool {
+    src.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$'))
+        .any(|token| token == ident)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -73,6 +142,18 @@ mod tests {
         assert_eq!(slug("🍵"), None);
         assert_eq!(slug("2fa"), None);
         assert_eq!(slug("rate.limit"), None);
+    }
+
+    #[test]
+    fn reserved_words_and_uses_are_found() {
+        assert!(is_reserved("delete"));
+        assert!(is_reserved("class"));
+        assert!(!is_reserved("pluginAlgo"));
+        let src = "import { createApp } from 'x';\nexport const app = createApp({});\n";
+        assert!(used_in(src, "createApp"));
+        assert!(used_in(src, "app"));
+        assert!(!used_in(src, "appModule"));
+        assert!(!used_in(src, "create"));
     }
 
     #[test]

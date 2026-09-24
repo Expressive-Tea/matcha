@@ -50,11 +50,18 @@ fn resolve_slug<R: BufRead, W: Write>(
         Some(n) => n,
         None => ask.text("Plugin name?", None, "the NAME argument")?,
     };
-    naming::slug(&raw).ok_or_else(|| {
+    let slug = naming::slug(&raw).ok_or_else(|| {
         invalid(format!(
             "'{raw}' does not make a plugin name: start with a letter, and use letters, digits, spaces or hyphens"
         ))
-    })
+    })?;
+    let fun = naming::camel(&slug);
+    if naming::is_reserved(&fun) {
+        return Err(invalid(format!(
+            "'{raw}' would make the factory `{fun}`, which is a reserved word in TypeScript; pick another name"
+        )));
+    }
+    Ok(slug)
 }
 
 /// Relative, and never climbing out: `..` or an absolute path would put the
@@ -85,6 +92,17 @@ fn in_app<R: BufRead, W: Write>(opts: Opts, ask: &mut Ask<R, W>, root: &Path) ->
     }
     let slug = resolve_slug(opts.name, ask)?;
 
+    let fun = naming::camel(&slug);
+    let src = std::fs::read_to_string(&entry_path)?;
+    // A second binding of a name the entry already has is a SyntaxError, and it
+    // would break the app rather than only the new plugin.
+    if naming::used_in(&src, &fun) {
+        return Err(invalid(format!(
+            "{} already uses `{fun}`, so the plugin's factory would collide with it; pick another name",
+            entry_path.strip_prefix(root).unwrap_or(&entry_path).display()
+        )));
+    }
+
     let dir = root.join(&folder).join(&slug);
     if dir.exists() {
         return Err(Error::new(
@@ -102,11 +120,9 @@ fn in_app<R: BufRead, W: Write>(opts: Opts, ask: &mut Ask<R, W>, root: &Path) ->
         Path::new(&folder).join(&slug).join("index.ts").display()
     );
 
-    let fun = naming::camel(&slug);
     let call = format!("{fun}()");
     // Both entry candidates live in src/, so the plugin folder is one level up.
     let from = format!("../{folder}/{slug}/index");
-    let src = std::fs::read_to_string(&entry_path)?;
     let imported = wire::add_import(&src, &fun, &from);
     match wire::add_to_createapp(&imported, "plugins", &call) {
         Some(wired) => {
