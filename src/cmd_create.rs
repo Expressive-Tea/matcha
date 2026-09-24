@@ -53,8 +53,10 @@ const PIECES: &[Piece] = &[
 /// list, so a new kind cannot be accepted by the parser and rejected by `run`
 /// (or the reverse).
 pub fn kinds() -> Vec<&'static str> {
-    std::iter::once("module")
+    ["module"]
+        .into_iter()
         .chain(PIECES.iter().map(|p| p.kind))
+        .chain(["plugin"])
         .collect()
 }
 
@@ -143,7 +145,7 @@ fn create_module(name: &str, check: bool) -> std::io::Result<()> {
     maybe_check(check)
 }
 
-fn maybe_check(check: bool) -> std::io::Result<()> {
+pub(crate) fn maybe_check(check: bool) -> std::io::Result<()> {
     if check {
         match crate::check::run(Path::new(".")) {
             Ok(true) => println!("✓ type-check passed"),

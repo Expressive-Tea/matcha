@@ -1,10 +1,16 @@
 name: Promote → GitHub
 
-# Runs on GITEA ONLY. Mirrors only main + version tags to the public GitHub repo.
+# Runs on GITEA ONLY. Mirrors `main` to the public GitHub repo.
+#
+# Tags are NOT promoted here. They are promoted by release.yml's `promote-tag`
+# job, which waits for this forge's builds to pass first — pushing a tag is what
+# starts GitHub's release and its crates.io publish, and crates.io cannot be
+# unpublished, only yanked. Both workflows used to fire on the same tag push, so
+# Gitea built and GitHub published at the same time and this forge was never the
+# check it was meant to be.
 on:
   push:
     branches: [main]
-    tags: ['v*']
 
 jobs:
   push-github:
@@ -14,14 +20,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Push main + tags to GitHub
+      - name: Push main to GitHub
         env:
           GH_TOKEN: ${{ secrets.GH_PROMOTE_TOKEN }}
         run: |
           git remote add github "https://x-access-token:${GH_TOKEN}@github.com/Expressive-Tea/matcha.git"
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            git push github "refs/tags/${{ github.ref_name }}"
-          else
-            git push github "HEAD:refs/heads/main"
-            git push github --tags
-          fi
+          # Deliberately not `--tags`. v26.7.0 points at a different commit on
+          # each forge and v26.8.0-beta.0 is annotated here and lightweight
+          # there, so pushing every tag is a non-fast-forward that fails — which
+          # it has been doing on every push to main, reddening a job whose real
+          # work (the line above) had already succeeded. Reconciling that
+          # divergence means rewriting what a published tag points at, which is
+          # a decision rather than a fix; new tags are unaffected and go through
+          # release.yml.
+          git push github "HEAD:refs/heads/main"

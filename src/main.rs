@@ -1,3 +1,4 @@
+mod ask;
 mod check;
 mod cli;
 mod cmd_add;
@@ -5,8 +6,11 @@ mod cmd_create;
 mod cmd_doctor;
 mod cmd_graph;
 mod cmd_new;
+mod cmd_plugin;
 mod cmd_run;
 mod entry;
+mod naming;
+mod plugin_files;
 mod runtime;
 mod template;
 mod wire;
@@ -33,8 +37,52 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Command::Create { kind, name, check } => {
-            if let Err(e) = cmd_create::run(&kind, &name, check) {
+        Command::Create {
+            kind,
+            name,
+            check,
+            package,
+            folder,
+            scope,
+            registry,
+            npm_name,
+        } => {
+            let stray: Vec<&str> = [
+                ("--package", package.is_some()),
+                ("--folder", folder.is_some()),
+                ("--scope", scope.is_some()),
+                ("--registry", registry.is_some()),
+                ("--npm-name", npm_name.is_some()),
+            ]
+            .into_iter()
+            .filter(|(_, on)| *on)
+            .map(|(flag, _)| flag)
+            .collect();
+            let result = if kind != "plugin" && !stray.is_empty() {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("{} only apply to create plugin", stray.join(", ")),
+                ))
+            } else if kind == "plugin" {
+                cmd_plugin::run(cmd_plugin::Opts {
+                    name,
+                    package,
+                    folder,
+                    scope,
+                    registry,
+                    npm_name,
+                    check,
+                })
+            } else {
+                match name {
+                    Some(name) => cmd_create::run(&kind, &name, check),
+                    None => Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        format!("create {kind} needs a name"),
+                    )),
+                }
+            };
+            if let Err(e) = result {
                 eprintln!("error: {e}");
                 std::process::exit(1);
             }

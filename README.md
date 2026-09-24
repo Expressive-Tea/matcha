@@ -38,6 +38,7 @@ matcha new my-api                          # scaffold from the official starter
 matcha new my-api --template-url gh:owner/repo   # scaffold from any git template
 matcha run                                 # detect node/deno/bun and run in watch
 matcha create controller Users             # generate + auto-wire into @Module
+matcha create plugin "Plugin Algo"         # an in-app plugin, or --package for its own package
 matcha add sse                             # add a capability to your controller
 matcha graph                               # draw the dependency graph
 matcha explain /users/:id                  # one route's chain, in execution order
@@ -110,6 +111,31 @@ compile — only to serve the route.
 and wire pieces into the right `@Module` array or controller. Edits are
 idempotent and revert themselves if they would break the file's syntax. Pass
 `--check` to `create` to type-check with your project's runtime afterward.
+
+### `matcha create plugin`
+
+An in-app plugin by default, or a package of its own.
+
+```sh
+matcha create plugin "Plugin Algo"                                    # plugins/plugin-algo/, registered in createApp
+matcha create plugin algo --folder lib/plugins
+matcha create plugin algo --package=./algo --scope acme                    # a JSR package
+matcha create plugin algo --package=./algo --scope acme --registry both    # JSR + npm, ESM only
+```
+
+In-app, each plugin gets a folder of its own under `plugins/` (or `--folder`, relative to the
+project root) and is registered in `createApp({ plugins })`. It lives in a folder so it can become
+a package later without being pulled out of the app.
+
+`--package` writes a package into the current directory, or `--package=DIR` into `DIR`, and either
+one has to be empty. The `=` is required, so a word after a bare `--package` is the plugin's
+name. JSR is the default, because it records which runtimes a package supports. `--registry both`
+adds npm with a `tsc` build to ESM only, and suggests the `@scope/green-tea-<name>` name without
+requiring it. The package passes `deno test`, `node --test`,
+`bun test` and `deno publish --dry-run` as generated.
+
+At a terminal it asks for whatever the flags leave out. Without a terminal (CI, a pipe) it takes the
+defaults, and for anything that has no default it stops and names the flag to pass.
 
 ### `matcha doctor`
 
