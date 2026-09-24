@@ -9,6 +9,29 @@ green-tea's convention. **The CLI ships on its own version line**: `matcha` 26.8
 mean `@green-tea/core` 26.8, and the two release independently. The core version a scaffold
 is pinned to is `CORE_VERSION` in `src/template.rs`, and each entry below says when it moved.
 
+## [26.9.0-beta.1] - 2026-09-24
+
+### Added
+
+- **`matcha create plugin`.** By default it scaffolds an in-app plugin in a folder of its own,
+  `plugins/<name>/`, and registers it in `createApp({ plugins })`. With `--package [DIR]` it writes
+  a package instead. JSR is the default, and `--registry both` adds an ESM-only npm build. The
+  package passes `deno test`, `node --test`, `bun test` and `deno publish --dry-run` as generated.
+  At a terminal it asks for what the flags leave out. Without one it takes the defaults, and fails
+  with the flag to pass instead of waiting for an answer.
+
+### Changed
+
+- **Scaffolds `@green-tea/core` 26.9.0-beta.2** (`CORE_VERSION` moved from beta.1). That is the
+  release where a plugin became `{ name, mount }` and `app.boot()` became public, so a project
+  made with the previous version could not use plugins in their current form.
+
+### Fixed
+
+- **The Deno and Bun starters bound the port before booting.** They passed `app.fetch` straight to
+  `Deno.serve` and `Bun.serve`, so a provider that failed left the port open and answering 500 to
+  every request. They now `await serveDeno(app)` and `await serveBun(app)`, which boot first.
+
 ## [26.9.0-beta.0] - 2026-09-05
 
 ### Added
