@@ -261,7 +261,7 @@ pub fn add_to_createapp_modules(src: &str, symbol: &str) -> Option<String> {
 fn insert_into_object_array(src: &str, object: Node, key: &str, symbol: &str) -> Option<String> {
     if let Some((open, close)) = find_key_array_span(object, src, key) {
         let inner = &src[open + 1..close];
-        if inner.split(',').map(str::trim).any(|s| s == symbol) {
+        if array_elements(object, src, key).iter().any(|e| e == symbol) {
             return Some(src.to_string()); // idempotent
         }
         let joined = if inner.trim().is_empty() {
@@ -303,6 +303,32 @@ fn insert_into_object_array(src: &str, object: Node, key: &str, symbol: &str) ->
     } else {
         None
     }
+}
+
+/// The text of each element of `object`'s `key: [...]` array, read from the
+/// parse tree: `algo({ a: 1, b: 2 })` is one element, which a split on `,` is not.
+fn array_elements(object: Node, src: &str, key: &str) -> Vec<String> {
+    let mut c = object.walk();
+    for pair in object.named_children(&mut c) {
+        let is_key = pair.kind() == "pair"
+            && pair
+                .child_by_field_name("key")
+                .and_then(|k| k.utf8_text(src.as_bytes()).ok())
+                == Some(key);
+        let Some(array) = pair
+            .child_by_field_name("value")
+            .filter(|v| is_key && v.kind() == "array")
+        else {
+            continue;
+        };
+        let mut ac = array.walk();
+        return array
+            .named_children(&mut ac)
+            .filter_map(|e| e.utf8_text(src.as_bytes()).ok())
+            .map(|t| t.split_whitespace().collect::<Vec<_>>().join(" "))
+            .collect();
+    }
+    Vec::new()
 }
 
 /// True when `object` has any direct `pair` child whose key text equals `key`,
@@ -473,6 +499,15 @@ fn find_module_object<'a>(root: &Node<'a>, src: &str) -> Option<Node<'a>> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn an_element_with_commas_inside_is_still_one_element() {
+        let src = "const app = createApp({ plugins: [algo({ a: 1, b: 2 })] });\n";
+        assert_eq!(
+            add_to_createapp(src, "plugins", "algo({ a: 1, b: 2 })").as_deref(),
+            Some(src)
+        );
+    }
+
     #[test]
     fn binds_sees_identifiers_not_strings_or_comments() {
         let src = "import { createApp } from '@green-tea/core';\n// green tea\nexport const app = createApp({});\n";

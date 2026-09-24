@@ -47,7 +47,23 @@ fn main() {
             registry,
             npm_name,
         } => {
-            let result = if kind == "plugin" {
+            let stray: Vec<&str> = [
+                ("--package", package.is_some()),
+                ("--folder", folder.is_some()),
+                ("--scope", scope.is_some()),
+                ("--registry", registry.is_some()),
+                ("--npm-name", npm_name.is_some()),
+            ]
+            .into_iter()
+            .filter(|(_, on)| *on)
+            .map(|(flag, _)| flag)
+            .collect();
+            let result = if kind != "plugin" && !stray.is_empty() {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("{} only apply to create plugin", stray.join(", ")),
+                ))
+            } else if kind == "plugin" {
                 cmd_plugin::run(cmd_plugin::Opts {
                     name,
                     package,

@@ -27,13 +27,31 @@ pub fn run_with<R: BufRead, W: Write>(
     ask: &mut Ask<R, W>,
     root: &Path,
 ) -> io::Result<()> {
+    // A NAME given on the command line is checked before any question.
+    if let Some(name) = &opts.name {
+        check_name(name)?;
+    }
     let package = match opts.package {
         Some(_) => true,
         None => ask.yes_no("Separate it as a package?", false)?,
     };
     if package {
+        for (flag, given) in [("--folder", opts.folder.is_some()), ("--check", opts.check)] {
+            if given {
+                println!("note: {flag} only applies to an in-app plugin; ignored");
+            }
+        }
         package_mode(opts, ask, root)
     } else {
+        for (flag, given) in [
+            ("--scope", opts.scope.is_some()),
+            ("--registry", opts.registry.is_some()),
+            ("--npm-name", opts.npm_name.is_some()),
+        ] {
+            if given {
+                println!("note: {flag} only applies to --package; ignored");
+            }
+        }
         in_app(opts, ask, root)
     }
 }
@@ -42,15 +60,10 @@ fn invalid(msg: String) -> Error {
     Error::new(ErrorKind::InvalidInput, msg)
 }
 
-fn resolve_slug<R: BufRead, W: Write>(
-    name: Option<String>,
-    ask: &mut Ask<R, W>,
-) -> io::Result<String> {
-    let raw = match name {
-        Some(n) => n,
-        None => ask.text("Plugin name?", None, "the NAME argument")?,
-    };
-    let slug = naming::slug(&raw).ok_or_else(|| {
+/// The slug for `raw`, or why it cannot be one: not a name, or a factory that
+/// would be a reserved word.
+fn check_name(raw: &str) -> io::Result<String> {
+    let slug = naming::slug(raw).ok_or_else(|| {
         invalid(format!(
             "'{raw}' does not make a plugin name: start with a letter, and use letters, digits, spaces or hyphens"
         ))
@@ -62,6 +75,17 @@ fn resolve_slug<R: BufRead, W: Write>(
         )));
     }
     Ok(slug)
+}
+
+fn resolve_slug<R: BufRead, W: Write>(
+    name: Option<String>,
+    ask: &mut Ask<R, W>,
+) -> io::Result<String> {
+    let raw = match name {
+        Some(n) => n,
+        None => ask.text("Plugin name?", None, "the NAME argument")?,
+    };
+    check_name(&raw)
 }
 
 /// Relative, and never climbing out: `..` or an absolute path would put the
@@ -84,68 +108,119 @@ fn in_app<R: BufRead, W: Write>(opts: Opts, ask: &mut Ask<R, W>, root: &Path) ->
         Some(f) => f,
         None => ask.text("Folder?", Some("plugins"), "--folder")?,
     };
-    let folder = folder.trim_end_matches('/').to_string();
     if !inside_project(&folder) {
         return Err(invalid(format!(
             "the plugin folder has to be inside the project, got '{folder}'"
         )));
     }
+    // `.`, `./plugins` and `plugins/` all mean what they say without leaving a
+    // `./` or a trailing slash in the import path.
+    let folder: Vec<String> = Path::new(&folder)
+        .components()
+        .filter_map(|c| match c {
+            Component::Normal(p) => Some(p.to_string_lossy().into_owned()),
+            _ => None,
+        })
+        .collect();
+    let folder = folder.join("/");
     let slug = resolve_slug(opts.name, ask)?;
 
     let fun = naming::camel(&slug);
     let src = std::fs::read_to_string(&entry_path)?;
+    let entry_shown = entry_path
+        .strip_prefix(root)
+        .unwrap_or(&entry_path)
+        .display()
+        .to_string();
     // A second binding of a name the entry already has is a SyntaxError, and it
     // would break the app rather than only the new plugin.
     if wire::binds(&src, &fun) {
         return Err(invalid(format!(
-            "{} already uses `{fun}`, so the plugin's factory would collide with it; pick another name",
-            entry_path.strip_prefix(root).unwrap_or(&entry_path).display()
+            "{entry_shown} already uses `{fun}`, so the plugin's factory would collide with it; pick another name"
         )));
     }
 
-    let dir = root.join(&folder).join(&slug);
+    let shown = Path::new(&folder).join(&slug);
+    let dir = root.join(&shown);
     if dir.exists() {
         return Err(Error::new(
             ErrorKind::AlreadyExists,
-            format!(
-                "{} already exists",
-                Path::new(&folder).join(&slug).display()
-            ),
+            format!("{} already exists", shown.display()),
         ));
     }
-    std::fs::create_dir_all(&dir)?;
-    std::fs::write(dir.join("index.ts"), plugin_files::factory(&slug))?;
-    println!(
-        "✓ {}",
-        Path::new(&folder).join(&slug).join("index.ts").display()
-    );
 
     let call = format!("{fun}()");
     // Both entry candidates live in src/, so the plugin folder is one level up.
-    let from = format!("../{folder}/{slug}/index");
-    let imported = wire::add_import(&src, &fun, &from);
-    match wire::add_to_createapp(&imported, "plugins", &call) {
+    let from = if folder.is_empty() {
+        format!("../{slug}/index")
+    } else {
+        format!("../{folder}/{slug}/index")
+    };
+    let wired = wire::add_to_createapp(&wire::add_import(&src, &fun, &from), "plugins", &call);
+
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join("index.ts"), plugin_files::factory(&slug))?;
+    println!("✓ {}", shown.join("index.ts").display());
+
+    match wired {
         Some(wired) => {
-            std::fs::write(&entry_path, wired)?;
+            // The plugin folder and its registration land together or not at
+            // all: a folder left behind would make the rerun say "already exists".
+            if let Err(e) = std::fs::write(&entry_path, wired) {
+                let _ = std::fs::remove_dir_all(&dir);
+                return Err(Error::new(
+                    e.kind(),
+                    format!(
+                        "could not write {entry_shown} ({e}); removed {} again",
+                        shown.display()
+                    ),
+                ));
+            }
             println!("✓ registered {call} in createApp");
         }
         None => println!(
-            "→ could not auto-register; add {call} to createApp plugins[] in {}, and import {{ {fun} }} from '{from}'",
-            entry_path.strip_prefix(root).unwrap_or(&entry_path).display()
+            "→ could not auto-register; add {call} to createApp plugins[] in {entry_shown}, and import {{ {fun} }} from '{from}'"
         ),
     }
     crate::cmd_create::maybe_check(opts.check)
 }
 
-const EMPTY_DIR: &str = "a plugin package needs an empty directory, so the package stays self-contained — pass --package <dir> or run it in an empty folder";
+const EMPTY_DIR: &str = "a plugin package needs an empty directory, so the package stays self-contained — pass --package=<dir> or run it in an empty folder";
 const NPM_CONVENTION: &str =
     "green-tea-<x> is the naming convention; the plugin listing uses it to find green-tea plugins.";
 
-/// JSR's scope rule: lowercase letters, digits and hyphens.
+/// JSR's scope rule: 2 to 20 characters, lowercase letters, digits and
+/// hyphens, and not starting with a hyphen.
 fn valid_scope(s: &str) -> bool {
-    !s.is_empty()
+    (2..=20).contains(&s.len())
+        && !s.starts_with('-')
         && s.chars()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+/// Writes every file, reporting each; on a failure, the error names the files
+/// already written, so a half-filled directory is not a mystery on the rerun.
+fn write_all(dir: &Path, root: &Path, files: &[(String, String)]) -> io::Result<()> {
+    let mut written: Vec<&str> = Vec::new();
+    for (rel, content) in files {
+        let path = dir.join(rel);
+        let result = std::fs::create_dir_all(path.parent().unwrap())
+            .and_then(|()| std::fs::write(&path, content));
+        if let Err(e) = result {
+            let so_far = if written.is_empty() {
+                "none".to_string()
+            } else {
+                written.join(", ")
+            };
+            return Err(Error::new(
+                e.kind(),
+                format!("could not write {rel} ({e}); already written: {so_far}"),
+            ));
+        }
+        println!("✓ {}", path.strip_prefix(root).unwrap_or(&path).display());
+        written.push(rel);
+    }
+    Ok(())
 }
 
 /// npm's package name rule, closely enough to catch a typo: optional `@scope/`, lowercase.
@@ -173,8 +248,17 @@ fn package_mode<R: BufRead, W: Write>(
         Some(Some(d)) => root.join(d),
         _ => root.to_path_buf(),
     };
+    let dir_shown = dir.strip_prefix(root).unwrap_or(&dir).display().to_string();
+    let dir_shown = if dir_shown.is_empty() {
+        ".".to_string()
+    } else {
+        dir_shown
+    };
+    if dir.is_file() {
+        return Err(invalid(format!("{dir_shown} is a file; {EMPTY_DIR}")));
+    }
     if dir.exists() && std::fs::read_dir(&dir)?.next().is_some() {
-        return Err(invalid(EMPTY_DIR.into()));
+        return Err(invalid(format!("{dir_shown}: {EMPTY_DIR}")));
     }
 
     let slug = resolve_slug(opts.name, ask)?;
@@ -185,7 +269,7 @@ fn package_mode<R: BufRead, W: Write>(
     let scope = scope.trim_start_matches('@').to_string();
     if !valid_scope(&scope) {
         return Err(invalid(format!(
-            "'{scope}' is not a JSR scope: use lowercase letters, digits and hyphens"
+            "'{scope}' is not a JSR scope: 2 to 20 lowercase letters, digits or hyphens, not starting with a hyphen"
         )));
     }
 
@@ -223,14 +307,51 @@ fn package_mode<R: BufRead, W: Write>(
     };
 
     let package = plugin_files::Package { slug, scope, npm };
-    for (rel, content) in plugin_files::package(&package) {
-        let path = dir.join(&rel);
-        std::fs::create_dir_all(path.parent().unwrap())?;
-        std::fs::write(&path, content)?;
-        println!("✓ {}", path.strip_prefix(root).unwrap_or(&path).display());
-    }
+    write_all(&dir, root, &plugin_files::package(&package))?;
     println!(
         "→ next: fill in the Runtimes table in README.md, then `deno test` and `deno publish`"
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    fn opts(name: Option<&str>) -> Opts {
+        Opts {
+            name: name.map(str::to_string),
+            package: None,
+            folder: None,
+            scope: None,
+            registry: None,
+            npm_name: None,
+            check: false,
+        }
+    }
+
+    /// A NAME passed on the command line is checked before any question: nobody should answer
+    /// "package?" and "folder?" to learn the name was never going to work. With no answers
+    /// scripted, asking anything would end in an end-of-input error instead.
+    #[test]
+    fn a_bad_name_fails_before_any_question() {
+        let mut ask = Ask::new(true, Cursor::new(Vec::new()), Vec::new());
+        let err = run_with(opts(Some("🍵")), &mut ask, Path::new("/nonexistent")).unwrap_err();
+        assert!(
+            err.to_string().contains("does not make a plugin name"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn write_all_reports_what_it_wrote_before_failing() {
+        let d = tempfile::tempdir().unwrap();
+        let files = vec![
+            ("a".to_string(), "x".to_string()),
+            ("a/b".to_string(), "y".to_string()),
+        ];
+        let err = write_all(d.path(), d.path(), &files).unwrap_err();
+        assert!(err.to_string().contains("already written: a"), "{err}");
+    }
 }

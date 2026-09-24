@@ -169,8 +169,7 @@ fn package_jsr_writes_the_tree_into_dir() {
             "create",
             "plugin",
             "Plugin Algo",
-            "--package",
-            "algo-pkg",
+            "--package=algo-pkg",
             "--scope",
             "@acme",
         ])
@@ -182,6 +181,7 @@ fn package_jsr_writes_the_tree_into_dir() {
         [
             ".gitignore",
             "CHANGELOG.md",
+            "LICENSE",
             "README.md",
             "deno.json",
             "package.json",
@@ -217,8 +217,7 @@ fn package_both_adds_the_npm_build() {
             "create",
             "plugin",
             "algo",
-            "--package",
-            "p",
+            "--package=p",
             "--scope",
             "acme",
             "--registry",
@@ -247,8 +246,7 @@ fn both_package_json_is_esm_only() {
             "create",
             "plugin",
             "algo",
-            "--package",
-            "p",
+            "--package=p",
             "--scope",
             "acme",
             "--registry",
@@ -270,8 +268,7 @@ fn package_accepts_any_npm_name_and_notes_the_convention() {
             "create",
             "plugin",
             "algo",
-            "--package",
-            "p",
+            "--package=p",
             "--scope",
             "acme",
             "--registry",
@@ -312,7 +309,7 @@ fn package_in_an_empty_current_directory() {
 fn package_off_a_tty_needs_a_scope() {
     let d = tempdir().unwrap();
     matcha(d.path())
-        .args(["create", "plugin", "algo", "--package", "p"])
+        .args(["create", "plugin", "algo", "--package=p"])
         .assert()
         .failure()
         .stderr(contains("--scope"));
@@ -327,8 +324,7 @@ fn package_rejects_a_bad_scope_or_npm_name() {
             "create",
             "plugin",
             "algo",
-            "--package",
-            "p",
+            "--package=p",
             "--scope",
             "Ac Me",
         ])
@@ -340,8 +336,7 @@ fn package_rejects_a_bad_scope_or_npm_name() {
             "create",
             "plugin",
             "algo",
-            "--package",
-            "q",
+            "--package=q",
             "--scope",
             "acme",
             "--registry",
@@ -379,8 +374,7 @@ fn a_package_whose_factory_would_be_a_reserved_word_writes_nothing() {
             "create",
             "plugin",
             "delete",
-            "--package",
-            "p",
+            "--package=p",
             "--scope",
             "acme",
         ])
@@ -432,15 +426,7 @@ fn words_inside_strings_and_comments_are_not_collisions() {
 fn package_engines_need_the_node_that_strips_types() {
     let d = tempdir().unwrap();
     matcha(d.path())
-        .args([
-            "create",
-            "plugin",
-            "algo",
-            "--package",
-            "p",
-            "--scope",
-            "acme",
-        ])
+        .args(["create", "plugin", "algo", "--package=p", "--scope", "acme"])
         .assert()
         .success();
     let pj = std::fs::read_to_string(d.path().join("p/package.json")).unwrap();
@@ -452,18 +438,187 @@ fn package_engines_need_the_node_that_strips_types() {
 fn the_generated_test_asserts_the_token_is_in_the_graph() {
     let d = tempdir().unwrap();
     matcha(d.path())
-        .args([
-            "create",
-            "plugin",
-            "algo",
-            "--package",
-            "p",
-            "--scope",
-            "acme",
-        ])
+        .args(["create", "plugin", "algo", "--package=p", "--scope", "acme"])
         .assert()
         .success();
     let t = std::fs::read_to_string(d.path().join("p/test/algo.test.ts")).unwrap();
     assert!(t.contains("app.graph()"), "{t}");
     assert!(t.contains("provides.includes('algo')"), "{t}");
+}
+
+#[test]
+fn package_into_a_path_that_is_a_file_names_it() {
+    let d = tempdir().unwrap();
+    std::fs::write(d.path().join("taken"), "x").unwrap();
+    matcha(d.path())
+        .args([
+            "create",
+            "plugin",
+            "algo",
+            "--package=taken",
+            "--scope",
+            "acme",
+        ])
+        .assert()
+        .failure()
+        .stderr(contains("taken is a file"));
+}
+
+#[test]
+fn the_empty_directory_error_names_the_directory() {
+    let d = tempdir().unwrap();
+    std::fs::create_dir_all(d.path().join("busy")).unwrap();
+    std::fs::write(d.path().join("busy/keep.txt"), "x").unwrap();
+    matcha(d.path())
+        .args([
+            "create",
+            "plugin",
+            "algo",
+            "--package=busy",
+            "--scope",
+            "acme",
+        ])
+        .assert()
+        .failure()
+        .stderr(contains("busy: a plugin package needs an empty directory"));
+}
+
+#[cfg(unix)]
+#[test]
+fn in_app_leaves_nothing_behind_when_the_entry_cannot_be_written() {
+    use std::os::unix::fs::PermissionsExt;
+    let d = project(APP);
+    let entry = d.path().join("src/app.ts");
+    std::fs::set_permissions(&entry, std::fs::Permissions::from_mode(0o444)).unwrap();
+    matcha(d.path())
+        .args(["create", "plugin", "algo"])
+        .assert()
+        .failure();
+    std::fs::set_permissions(&entry, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert!(
+        !d.path().join("plugins/algo").exists(),
+        "the plugin folder is rolled back"
+    );
+    assert_eq!(std::fs::read_to_string(&entry).unwrap(), APP);
+}
+
+#[test]
+fn folder_dot_and_leading_dot_slash_give_clean_imports() {
+    let d = project(APP);
+    matcha(d.path())
+        .args(["create", "plugin", "algo", "--folder", "."])
+        .assert()
+        .success();
+    assert!(d.path().join("algo/index.ts").exists());
+    let app = std::fs::read_to_string(d.path().join("src/app.ts")).unwrap();
+    assert!(app.contains("from '../algo/index'"), "{app}");
+
+    let d = project(APP);
+    matcha(d.path())
+        .args(["create", "plugin", "algo", "--folder", "./plugins/"])
+        .assert()
+        .success();
+    let app = std::fs::read_to_string(d.path().join("src/app.ts")).unwrap();
+    assert!(app.contains("from '../plugins/algo/index'"), "{app}");
+}
+
+#[test]
+fn plugin_flags_on_another_kind_are_an_error() {
+    let d = project(APP);
+    matcha(d.path())
+        .args(["create", "controller", "Users", "--scope", "acme"])
+        .assert()
+        .failure()
+        .stderr(contains("only apply to create plugin"));
+    assert!(!d.path().join("src/controllers").exists());
+}
+
+#[test]
+fn flags_for_the_other_mode_are_named_as_ignored() {
+    let d = project(APP);
+    matcha(d.path())
+        .args(["create", "plugin", "algo", "--scope", "acme"])
+        .assert()
+        .success()
+        .stdout(contains("--scope only applies to --package; ignored"));
+
+    let d = tempdir().unwrap();
+    matcha(d.path())
+        .args([
+            "create",
+            "plugin",
+            "algo",
+            "--package",
+            "--scope",
+            "acme",
+            "--folder",
+            "x",
+            "--check",
+        ])
+        .assert()
+        .success()
+        .stdout(contains(
+            "--folder only applies to an in-app plugin; ignored",
+        ))
+        .stdout(contains(
+            "--check only applies to an in-app plugin; ignored",
+        ));
+}
+
+/// `--package algo` used to take `algo` as the directory. It now needs `--package=DIR`, so a
+/// bare word after `--package` is the plugin's name.
+#[test]
+fn a_word_after_package_is_the_name_not_the_directory() {
+    let d = tempdir().unwrap();
+    matcha(d.path())
+        .args(["create", "plugin", "--package", "algo", "--scope", "acme"])
+        .assert()
+        .success();
+    let deno = std::fs::read_to_string(d.path().join("deno.json")).unwrap();
+    assert!(deno.contains("\"name\": \"@acme/algo\""), "{deno}");
+}
+
+#[test]
+fn scopes_jsr_would_refuse_are_refused() {
+    for scope in ["-", "-acme", "a", "abcdefghijklmnopqrstu"] {
+        let d = tempdir().unwrap();
+        matcha(d.path())
+            // `=` so a leading hyphen is a value, not another flag.
+            .args([
+                "create",
+                "plugin",
+                "algo",
+                "--package",
+                &format!("--scope={scope}"),
+            ])
+            .assert()
+            .failure()
+            .stderr(contains("is not a JSR scope"));
+        assert!(!d.path().join("deno.json").exists(), "{scope}");
+    }
+}
+
+#[test]
+fn packages_ship_a_license_and_node_types() {
+    for registry in ["jsr", "both"] {
+        let d = tempdir().unwrap();
+        matcha(d.path())
+            .args([
+                "create",
+                "plugin",
+                "algo",
+                "--package",
+                "--scope",
+                "acme",
+                "--registry",
+                registry,
+            ])
+            .assert()
+            .success();
+        let license = std::fs::read_to_string(d.path().join("LICENSE")).unwrap();
+        assert!(license.starts_with("MIT License"), "{registry}");
+        let pj = std::fs::read_to_string(d.path().join("package.json")).unwrap();
+        assert!(pj.contains("\"license\": \"MIT\""), "{registry}: {pj}");
+        assert!(pj.contains("\"@types/node\""), "{registry}: {pj}");
+    }
 }

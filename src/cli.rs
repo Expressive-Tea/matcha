@@ -30,8 +30,8 @@ pub enum Command {
         name: Option<String>,
         #[arg(long)]
         check: bool,
-        /// plugin: a package of its own, in DIR (default: the current directory, which must be empty)
-        #[arg(long, num_args = 0..=1, value_name = "DIR")]
+        /// plugin: a package of its own, in --package=DIR (default: the current directory, which must be empty)
+        #[arg(long, num_args = 0..=1, require_equals = true, value_name = "DIR")]
         package: Option<Option<String>>,
         /// plugin, in-app: folder relative to the project root (default: plugins)
         #[arg(long)]

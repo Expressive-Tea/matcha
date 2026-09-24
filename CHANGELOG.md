@@ -14,7 +14,7 @@ is pinned to is `CORE_VERSION` in `src/template.rs`, and each entry below says w
 ### Added
 
 - **`matcha create plugin`.** By default it scaffolds an in-app plugin in a folder of its own,
-  `plugins/<name>/`, and registers it in `createApp({ plugins })`. With `--package [DIR]` it writes
+  `plugins/<name>/`, and registers it in `createApp({ plugins })`. With `--package` (or `--package=DIR`) it writes
   a package instead. JSR is the default, and `--registry both` adds an ESM-only npm build. The
   package passes `deno test`, `node --test`, `bun test` and `deno publish --dry-run` as generated.
   At a terminal it asks for what the flags leave out. Without one it takes the defaults, and fails

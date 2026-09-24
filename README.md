@@ -119,18 +119,19 @@ An in-app plugin by default, or a package of its own.
 ```sh
 matcha create plugin "Plugin Algo"                                    # plugins/plugin-algo/, registered in createApp
 matcha create plugin algo --folder lib/plugins
-matcha create plugin algo --package ./algo --scope acme                    # a JSR package
-matcha create plugin algo --package ./algo --scope acme --registry both    # JSR + npm, ESM only
+matcha create plugin algo --package=./algo --scope acme                    # a JSR package
+matcha create plugin algo --package=./algo --scope acme --registry both    # JSR + npm, ESM only
 ```
 
 In-app, each plugin gets a folder of its own under `plugins/` (or `--folder`, relative to the
 project root) and is registered in `createApp({ plugins })`. It lives in a folder so it can become
 a package later without being pulled out of the app.
 
-`--package [DIR]` writes a package into `DIR`, or into the current directory, and either one has to
-be empty. JSR is the default, because it records which runtimes a package supports.
-`--registry both` adds npm with a `tsc` build to ESM only, and suggests the
-`@scope/green-tea-<name>` name without requiring it. The package passes `deno test`, `node --test`,
+`--package` writes a package into the current directory, or `--package=DIR` into `DIR`, and either
+one has to be empty. The `=` is required, so a word after a bare `--package` is the plugin's
+name. JSR is the default, because it records which runtimes a package supports. `--registry both`
+adds npm with a `tsc` build to ESM only, and suggests the `@scope/green-tea-<name>` name without
+requiring it. The package passes `deno test`, `node --test`,
 `bun test` and `deno publish --dry-run` as generated.
 
 At a terminal it asks for whatever the flags leave out. Without a terminal (CI, a pipe) it takes the

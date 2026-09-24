@@ -65,6 +65,7 @@ pub fn package(p: &Package) -> Vec<(String, String)> {
             "CHANGELOG.md".to_string(),
             "# Changelog\n\n## [Unreleased]\n\n- First version.\n".to_string(),
         ),
+        ("LICENSE".to_string(), license(p)),
         (
             ".gitignore".to_string(),
             "node_modules\ndist\n.DS_Store\n".to_string(),
@@ -91,7 +92,7 @@ fn deno_json(p: &Package) -> String {
     "test": "deno test --allow-env --allow-read"
   }},
   "publish": {{
-    "include": ["src", "README.md", "CHANGELOG.md", "deno.json"]
+    "include": ["src", "README.md", "CHANGELOG.md", "LICENSE", "deno.json"]
   }}
 }}
 "#,
@@ -112,13 +113,15 @@ fn package_json(p: &Package) -> String {
   "name": "{name}",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
 {ENGINES}
   "scripts": {{
     "test": "node --test test/*.test.ts"
   }},
   "devDependencies": {{
-    "@green-tea/core": "{CORE_VERSION}"
+    "@green-tea/core": "{CORE_VERSION}",
+    "@types/node": "^22"
   }}
 }}
 "#,
@@ -145,6 +148,7 @@ fn package_json(p: &Package) -> String {
   }},
   "devDependencies": {{
     "@green-tea/core": "{CORE_VERSION}",
+    "@types/node": "^22",
     "typescript": "^5"
   }}
 }}
@@ -197,6 +201,43 @@ test('two instances under one name are refused', () => {{
     )
 }
 
+/// MIT as a starting point, which the README tells the author to change. The
+/// holder is the scope, the closest thing to an author matcha knows.
+fn license(p: &Package) -> String {
+    // Whole years since the epoch, averaged over leap years: a copyright line
+    // needs the year, not the date, and this needs no dependency.
+    let year = 1970
+        + std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() / 31_556_952)
+            .unwrap_or(0);
+    let scope = &p.scope;
+    format!(
+        "MIT License
+
+Copyright (c) {year} {scope}
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the \"Software\"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"
+    )
+}
+
 fn readme(p: &Package) -> String {
     let jsr = p.jsr_name();
     let fun = camel(&p.slug);
@@ -238,6 +279,11 @@ import {{ {fun} }} from '{jsr}';
 
 const app = createApp({{ modules: [AppModule], plugins: [{fun}()] }});
 ```
+
+## License
+
+MIT, as generated. Change `LICENSE` and the `license` fields in `deno.json` and `package.json`
+if you publish under another.
 
 ## List it
 
