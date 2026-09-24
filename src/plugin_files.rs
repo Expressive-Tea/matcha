@@ -2,6 +2,7 @@
 //! options in, file content out, so the shapes are tested without a disk.
 
 use crate::naming::{camel, pascal};
+use crate::template::CORE_VERSION;
 
 /// The plugin itself, the same in both modes. It follows the official
 /// plugins' convention: one string is the plugin name, the node name and the
@@ -33,6 +34,212 @@ export function {fun}(options: {opts} = {{}}): Plugin {{
     }},
   }};
 }}
+"
+    )
+}
+
+pub const JSR_BANNER: &str = "JSR is recommended. It records which runtimes a package supports (Node, Deno, Bun, workerd), and the green-tea plugin listing shows that for every plugin.";
+
+pub struct Package {
+    pub slug: String,
+    pub scope: String,
+    /// `Some(name)` when it also publishes to npm.
+    pub npm: Option<String>,
+}
+
+impl Package {
+    fn jsr_name(&self) -> String {
+        format!("@{}/{}", self.scope, self.slug)
+    }
+}
+
+/// Every file of a package, as (path relative to the package root, content).
+pub fn package(p: &Package) -> Vec<(String, String)> {
+    let mut files = vec![
+        ("deno.json".to_string(), deno_json(p)),
+        ("package.json".to_string(), package_json(p)),
+        ("src/index.ts".to_string(), factory(&p.slug)),
+        (format!("test/{}.test.ts", p.slug), test_ts(p)),
+        ("README.md".to_string(), readme(p)),
+        (
+            "CHANGELOG.md".to_string(),
+            "# Changelog\n\n## [Unreleased]\n\n- First version.\n".to_string(),
+        ),
+        (
+            ".gitignore".to_string(),
+            "node_modules\ndist\n.DS_Store\n".to_string(),
+        ),
+    ];
+    if p.npm.is_some() {
+        files.push(("tsconfig.json".to_string(), TSCONFIG.to_string()));
+    }
+    files
+}
+
+fn deno_json(p: &Package) -> String {
+    format!(
+        r#"{{
+  "name": "{name}",
+  "version": "0.1.0",
+  "license": "MIT",
+  "exports": "./src/index.ts",
+  "imports": {{
+    "@green-tea/core": "npm:@green-tea/core@{CORE_VERSION}"
+  }},
+  "tasks": {{
+    "test": "deno test --allow-env --allow-read"
+  }},
+  "publish": {{
+    "include": ["src", "README.md", "CHANGELOG.md", "deno.json"]
+  }}
+}}
+"#,
+        name = p.jsr_name()
+    )
+}
+
+const ENGINES: &str = r#"  "engines": {
+    "node": ">=22",
+    "deno": ">=2",
+    "bun": ">=1.3"
+  },"#;
+
+fn package_json(p: &Package) -> String {
+    match &p.npm {
+        None => format!(
+            r#"{{
+  "name": "{name}",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+{ENGINES}
+  "scripts": {{
+    "test": "node --test test/*.test.ts"
+  }},
+  "devDependencies": {{
+    "@green-tea/core": "{CORE_VERSION}"
+  }}
+}}
+"#,
+            name = p.jsr_name()
+        ),
+        Some(npm) => format!(
+            r#"{{
+  "name": "{npm}",
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "exports": {{
+    ".": {{
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }}
+  }},
+  "files": ["dist"],
+{ENGINES}
+  "scripts": {{
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "test": "node --test test/*.test.ts"
+  }},
+  "devDependencies": {{
+    "@green-tea/core": "{CORE_VERSION}",
+    "typescript": "^5"
+  }}
+}}
+"#
+        ),
+    }
+}
+
+const TSCONFIG: &str = r#"{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "include": ["src"]
+}
+"#;
+
+fn test_ts(p: &Package) -> String {
+    let fun = camel(&p.slug);
+    let slug = &p.slug;
+    format!(
+        "import {{ strict as assert }} from 'node:assert';
+import {{ test }} from 'node:test';
+
+import {{ createApp }} from '@green-tea/core';
+
+import {{ {fun} }} from '../src/index.ts';
+
+test('mounts into an app, and the app boots', async () => {{
+  const app = createApp({{ modules: [], plugins: [{fun}()] }});
+  await app.boot();
+}});
+
+test('two instances mount side by side under different tokens', async () => {{
+  const app = createApp({{ modules: [], plugins: [{fun}(), {fun}({{ provides: '{slug}-2' }})] }});
+  await app.boot();
+}});
+
+test('two instances under one name are refused', () => {{
+  assert.throws(() => createApp({{ modules: [], plugins: [{fun}(), {fun}()] }}), /two plugins are named/);
+}});
+"
+    )
+}
+
+fn readme(p: &Package) -> String {
+    let jsr = p.jsr_name();
+    let fun = camel(&p.slug);
+    let npm_install = match &p.npm {
+        Some(npm) => format!("\nOr from npm:\n\n```bash\nnpm i {npm}\n```\n"),
+        None => String::new(),
+    };
+    format!(
+        "# {jsr}
+
+> {JSR_BANNER}
+
+What this plugin adds to a green-tea app, in one or two sentences.
+
+## Runtimes
+
+| Runtime | Supported | Why not |
+|---|---|---|
+| Node | | |
+| Deno | | |
+| Bun | | |
+| workerd (edge) | | |
+
+Fill in every row. The green-tea plugin listing asks for a reason beside each runtime this does not support.
+
+## Install
+
+```bash
+npx jsr add {jsr}
+```
+{npm_install}
+Needs `@green-tea/core@{CORE_VERSION}` or newer.
+
+## Usage
+
+```ts
+import {{ createApp }} from '@green-tea/core';
+import {{ {fun} }} from '{jsr}';
+
+const app = createApp({{ modules: [AppModule], plugins: [{fun}()] }});
+```
+
+## List it
+
+Once it is published, add it to the green-tea plugin listing: https://green-tea.expressive-tea.io/plugins/#contribute
 "
     )
 }

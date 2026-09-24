@@ -121,10 +121,104 @@ fn in_app<R: BufRead, W: Write>(opts: Opts, ask: &mut Ask<R, W>, root: &Path) ->
     crate::cmd_create::maybe_check(opts.check)
 }
 
+const EMPTY_DIR: &str = "a plugin package needs an empty directory, so the package stays self-contained — pass --package <dir> or run it in an empty folder";
+const NPM_CONVENTION: &str =
+    "green-tea-<x> is the naming convention; the plugin listing uses it to find green-tea plugins.";
+
+/// JSR's scope rule: lowercase letters, digits and hyphens.
+fn valid_scope(s: &str) -> bool {
+    !s.is_empty()
+        && s.chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+/// npm's package name rule, closely enough to catch a typo: optional `@scope/`, lowercase.
+fn valid_npm_name(s: &str) -> bool {
+    let part = |p: &str| {
+        !p.is_empty()
+            && !p.starts_with(['.', '_'])
+            && p.chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "-._~".contains(c))
+    };
+    match s.strip_prefix('@').and_then(|rest| rest.split_once('/')) {
+        Some((scope, name)) => part(scope) && part(name),
+        None => !s.starts_with('@') && part(s),
+    }
+}
+
 fn package_mode<R: BufRead, W: Write>(
-    _opts: Opts,
-    _ask: &mut Ask<R, W>,
-    _root: &Path,
+    opts: Opts,
+    ask: &mut Ask<R, W>,
+    root: &Path,
 ) -> io::Result<()> {
-    Err(invalid("package mode is not built yet".into()))
+    // The directory is checked before any question: a person should not answer
+    // four questions to be told the folder was never going to work.
+    let dir = match &opts.package {
+        Some(Some(d)) => root.join(d),
+        _ => root.to_path_buf(),
+    };
+    if dir.exists() && std::fs::read_dir(&dir)?.next().is_some() {
+        return Err(invalid(EMPTY_DIR.into()));
+    }
+
+    let slug = resolve_slug(opts.name, ask)?;
+    let scope = match opts.scope {
+        Some(s) => s,
+        None => ask.text("JSR scope?", None, "--scope")?,
+    };
+    let scope = scope.trim_start_matches('@').to_string();
+    if !valid_scope(&scope) {
+        return Err(invalid(format!(
+            "'{scope}' is not a JSR scope: use lowercase letters, digits and hyphens"
+        )));
+    }
+
+    let registry = match opts.registry {
+        Some(r) => r,
+        None => {
+            ask.say(&format!("\n{}\n", plugin_files::JSR_BANNER))?;
+            match ask
+                .text(
+                    "Publish to: (1) JSR only  (2) JSR + npm",
+                    Some("1"),
+                    "--registry",
+                )?
+                .as_str()
+            {
+                "2" | "both" => "both".to_string(),
+                _ => "jsr".to_string(),
+            }
+        }
+    };
+
+    let npm = if registry == "both" {
+        let suggested = format!("@{scope}/green-tea-{slug}");
+        let name = match opts.npm_name {
+            Some(n) => n,
+            // The default in parentheses is the suggestion; Enter takes it.
+            None => ask.text("npm package name?", Some(&suggested), "--npm-name")?,
+        };
+        if !valid_npm_name(&name) {
+            return Err(invalid(format!("'{name}' is not a valid npm name")));
+        }
+        let unscoped = name.rsplit('/').next().unwrap_or(&name);
+        if !unscoped.starts_with("green-tea-") {
+            println!("note: {NPM_CONVENTION}");
+        }
+        Some(name)
+    } else {
+        None
+    };
+
+    let package = plugin_files::Package { slug, scope, npm };
+    for (rel, content) in plugin_files::package(&package) {
+        let path = dir.join(&rel);
+        std::fs::create_dir_all(path.parent().unwrap())?;
+        std::fs::write(&path, content)?;
+        println!("✓ {}", path.strip_prefix(root).unwrap_or(&path).display());
+    }
+    println!(
+        "→ next: fill in the Runtimes table in README.md, then `deno test` and `deno publish`"
+    );
+    Ok(())
 }

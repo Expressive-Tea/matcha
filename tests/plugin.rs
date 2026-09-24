@@ -143,3 +143,210 @@ fn other_kinds_still_require_a_name() {
         .failure()
         .stderr(contains("needs a name"));
 }
+
+fn files_under(dir: &std::path::Path) -> Vec<String> {
+    fn walk(base: &std::path::Path, dir: &std::path::Path, out: &mut Vec<String>) {
+        for e in std::fs::read_dir(dir).unwrap() {
+            let p = e.unwrap().path();
+            if p.is_dir() {
+                walk(base, &p, out)
+            } else {
+                out.push(p.strip_prefix(base).unwrap().display().to_string())
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(dir, dir, &mut out);
+    out.sort();
+    out
+}
+
+#[test]
+fn package_jsr_writes_the_tree_into_dir() {
+    let d = tempdir().unwrap();
+    matcha(d.path())
+        .args([
+            "create",
+            "plugin",
+            "Plugin Algo",
+            "--package",
+            "algo-pkg",
+            "--scope",
+            "@acme",
+        ])
+        .assert()
+        .success();
+    let pkg = d.path().join("algo-pkg");
+    assert_eq!(
+        files_under(&pkg),
+        [
+            ".gitignore",
+            "CHANGELOG.md",
+            "README.md",
+            "deno.json",
+            "package.json",
+            "src/index.ts",
+            "test/plugin-algo.test.ts"
+        ]
+    );
+    let deno = std::fs::read_to_string(pkg.join("deno.json")).unwrap();
+    assert!(deno.contains("\"name\": \"@acme/plugin-algo\""), "{deno}");
+    assert!(deno.contains("npm:@green-tea/core@26.9.0-beta.2"), "{deno}");
+    let pj = std::fs::read_to_string(pkg.join("package.json")).unwrap();
+    assert!(pj.contains("\"private\": true"), "{pj}");
+    assert!(pj.contains("\"devDependencies\""), "{pj}");
+    assert!(
+        !pj.contains("\"dependencies\""),
+        "core is a type-only dependency: {pj}"
+    );
+    let readme = std::fs::read_to_string(pkg.join("README.md")).unwrap();
+    assert!(readme.contains("JSR is recommended"), "banner");
+    for runtime in ["| Node |", "| Deno |", "| Bun |", "| workerd (edge) |"] {
+        assert!(readme.contains(runtime), "{runtime} row");
+    }
+}
+
+#[test]
+fn package_both_adds_the_npm_build() {
+    let d = tempdir().unwrap();
+    matcha(d.path())
+        .args([
+            "create",
+            "plugin",
+            "algo",
+            "--package",
+            "p",
+            "--scope",
+            "acme",
+            "--registry",
+            "both",
+        ])
+        .assert()
+        .success();
+    let pkg = d.path().join("p");
+    assert!(pkg.join("tsconfig.json").exists());
+    let pj = std::fs::read_to_string(pkg.join("package.json")).unwrap();
+    assert!(
+        pj.contains("\"name\": \"@acme/green-tea-algo\""),
+        "suggested name is the default: {pj}"
+    );
+    assert!(!pj.contains("\"private\""), "{pj}");
+    assert!(pj.contains("\"prepublishOnly\": \"npm run build\""), "{pj}");
+    let readme = std::fs::read_to_string(pkg.join("README.md")).unwrap();
+    assert!(readme.contains("npm i @acme/green-tea-algo"), "{readme}");
+}
+
+#[test]
+fn both_package_json_is_esm_only() {
+    let d = tempdir().unwrap();
+    matcha(d.path())
+        .args([
+            "create",
+            "plugin",
+            "algo",
+            "--package",
+            "p",
+            "--scope",
+            "acme",
+            "--registry",
+            "both",
+        ])
+        .assert()
+        .success();
+    let pj = std::fs::read_to_string(d.path().join("p/package.json")).unwrap();
+    assert!(pj.contains("\"type\": \"module\""), "{pj}");
+    assert!(!pj.contains("require"), "{pj}");
+    assert!(!pj.contains(".cjs"), "{pj}");
+}
+
+#[test]
+fn package_accepts_any_npm_name_and_notes_the_convention() {
+    let d = tempdir().unwrap();
+    matcha(d.path())
+        .args([
+            "create",
+            "plugin",
+            "algo",
+            "--package",
+            "p",
+            "--scope",
+            "acme",
+            "--registry",
+            "both",
+            "--npm-name",
+            "algo-plugin",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("green-tea-<x> is the naming convention"));
+    let pj = std::fs::read_to_string(d.path().join("p/package.json")).unwrap();
+    assert!(pj.contains("\"name\": \"algo-plugin\""), "{pj}");
+}
+
+#[test]
+fn package_refuses_a_non_empty_directory_and_writes_nothing() {
+    let d = tempdir().unwrap();
+    std::fs::write(d.path().join("keep.txt"), "x").unwrap();
+    matcha(d.path())
+        .args(["create", "plugin", "algo", "--package", "--scope", "acme"])
+        .assert()
+        .failure()
+        .stderr(contains("a plugin package needs an empty directory"));
+    assert_eq!(files_under(d.path()), ["keep.txt"]);
+}
+
+#[test]
+fn package_in_an_empty_current_directory() {
+    let d = tempdir().unwrap();
+    matcha(d.path())
+        .args(["create", "plugin", "algo", "--package", "--scope", "acme"])
+        .assert()
+        .success();
+    assert!(d.path().join("deno.json").exists());
+}
+
+#[test]
+fn package_off_a_tty_needs_a_scope() {
+    let d = tempdir().unwrap();
+    matcha(d.path())
+        .args(["create", "plugin", "algo", "--package", "p"])
+        .assert()
+        .failure()
+        .stderr(contains("--scope"));
+    assert!(!d.path().join("p").exists());
+}
+
+#[test]
+fn package_rejects_a_bad_scope_or_npm_name() {
+    let d = tempdir().unwrap();
+    matcha(d.path())
+        .args([
+            "create",
+            "plugin",
+            "algo",
+            "--package",
+            "p",
+            "--scope",
+            "Ac Me",
+        ])
+        .assert()
+        .failure()
+        .stderr(contains("scope"));
+    matcha(d.path())
+        .args([
+            "create",
+            "plugin",
+            "algo",
+            "--package",
+            "q",
+            "--scope",
+            "acme",
+            "--registry",
+            "both",
+            "--npm-name",
+            "Not Valid",
+        ])
+        .assert()
+        .failure()
+        .stderr(contains("npm name"));
+}
