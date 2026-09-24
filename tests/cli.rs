@@ -25,7 +25,10 @@ fn help_lists_all_subcommands() {
 #[test]
 fn create_and_add_advertise_every_value_they_accept() {
     for (command, values) in [
-        ("create", vec!["module", "controller", "step", "provider"]),
+        (
+            "create",
+            vec!["module", "controller", "step", "provider", "plugin"],
+        ),
         ("add", vec!["sse", "stream", "buffer", "ws", "upload"]),
     ] {
         let mut assertion = Command::cargo_bin("matcha")

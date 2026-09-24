@@ -215,15 +215,22 @@ pub fn add_to_module_array(src: &str, key: &str, symbol: &str) -> Option<String>
     insert_into_object_array(src, object, key, symbol)
 }
 
-/// Inserts `symbol` into the `modules` array of the first `createApp(...)`
-/// call's argument object (creating the `modules` key if absent). Idempotent;
-/// reverts (returns `None`) on parse breakage or when no `createApp(...)` call
-/// with an object argument is found.
-pub fn add_to_createapp_modules(src: &str, symbol: &str) -> Option<String> {
+/// Inserts `item` into the `key: [...]` array of the first `createApp(...)`
+/// call's argument object, creating the key if absent. `item` is any array
+/// element: a symbol for `modules`, a call like `algo()` for `plugins`.
+/// Idempotent; returns `None` on parse breakage, when there is no
+/// `createApp({...})`, or when `key` holds something other than an array
+/// literal.
+pub fn add_to_createapp(src: &str, key: &str, item: &str) -> Option<String> {
     let tree = parser().parse(src, None).unwrap();
     let root = tree.root_node();
     let object = find_createapp_object(&root, src)?;
-    insert_into_object_array(src, object, "modules", symbol)
+    insert_into_object_array(src, object, key, item)
+}
+
+/// `add_to_createapp` for `modules`, kept as the name `create module` reads.
+pub fn add_to_createapp_modules(src: &str, symbol: &str) -> Option<String> {
+    add_to_createapp(src, "modules", symbol)
 }
 
 /// Inserts `symbol` into the `key: [...]` array directly inside `object`

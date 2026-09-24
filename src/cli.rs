@@ -26,9 +26,25 @@ pub enum Command {
     Create {
         #[arg(value_parser = PossibleValuesParser::new(cmd_create::kinds()))]
         kind: String,
-        name: String,
+        /// Required for every kind but `plugin`, which asks for it
+        name: Option<String>,
         #[arg(long)]
         check: bool,
+        /// plugin: a package of its own, in DIR (default: the current directory, which must be empty)
+        #[arg(long, num_args = 0..=1, value_name = "DIR")]
+        package: Option<Option<String>>,
+        /// plugin, in-app: folder relative to the project root (default: plugins)
+        #[arg(long)]
+        folder: Option<String>,
+        /// plugin, package: the JSR scope
+        #[arg(long)]
+        scope: Option<String>,
+        /// plugin, package: where it publishes (default: jsr)
+        #[arg(long, value_parser = ["jsr", "both"])]
+        registry: Option<String>,
+        /// plugin, package, both: the npm name (default: @<scope>/green-tea-<slug>)
+        #[arg(long)]
+        npm_name: Option<String>,
     },
     /// Check the project for the misconfigurations that fail confusingly
     Doctor,
