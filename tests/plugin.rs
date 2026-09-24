@@ -490,6 +490,12 @@ fn in_app_leaves_nothing_behind_when_the_entry_cannot_be_written() {
     let d = project(APP);
     let entry = d.path().join("src/app.ts");
     std::fs::set_permissions(&entry, std::fs::Permissions::from_mode(0o444)).unwrap();
+    // Root ignores the mode (CI containers run as root), so there is no failed
+    // write to roll back from. Say so rather than pass on a write that worked.
+    if std::fs::OpenOptions::new().write(true).open(&entry).is_ok() {
+        eprintln!("skipped: this user can write a 0444 file, so the failure cannot be staged");
+        return;
+    }
     matcha(d.path())
         .args(["create", "plugin", "algo"])
         .assert()
