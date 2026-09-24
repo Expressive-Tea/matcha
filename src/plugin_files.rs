@@ -83,6 +83,7 @@ fn deno_json(p: &Package) -> String {
   "version": "0.1.0",
   "license": "MIT",
   "exports": "./src/index.ts",
+  "nodeModulesDir": "auto",
   "imports": {{
     "@green-tea/core": "npm:@green-tea/core@{CORE_VERSION}"
   }},

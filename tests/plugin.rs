@@ -192,6 +192,9 @@ fn package_jsr_writes_the_tree_into_dir() {
     let deno = std::fs::read_to_string(pkg.join("deno.json")).unwrap();
     assert!(deno.contains("\"name\": \"@acme/plugin-algo\""), "{deno}");
     assert!(deno.contains("npm:@green-tea/core@26.9.0-beta.2"), "{deno}");
+    // Without it `deno test` needs a `deno install` first, and then fails to
+    // type-check `node:assert` for want of @types/node.
+    assert!(deno.contains("\"nodeModulesDir\": \"auto\""), "{deno}");
     let pj = std::fs::read_to_string(pkg.join("package.json")).unwrap();
     assert!(pj.contains("\"private\": true"), "{pj}");
     assert!(pj.contains("\"devDependencies\""), "{pj}");
