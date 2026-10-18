@@ -50,7 +50,7 @@ jobs:
             os: ubuntu-latest
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust
         run: |
@@ -131,7 +131,7 @@ jobs:
           fi
 
       - name: Upload to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           # A tag with a hyphen is a prerelease (26.9.0-beta.1). Unflagged, it
           # would answer /releases/latest — which is what install.sh resolves
@@ -163,7 +163,7 @@ jobs:
     if: ${{ github.server_url == 'https://github.com' }}
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install the published arm64 binary and run it
         run: |
           set -eu
@@ -185,7 +185,7 @@ jobs:
     if: ${{ github.server_url != 'https://github.com' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: Push the tag to GitHub
@@ -209,7 +209,7 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Rust
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable

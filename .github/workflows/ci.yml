@@ -15,7 +15,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Rust
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
@@ -38,7 +38,7 @@ jobs:
       matrix:
         runtime: [node, deno, bun, edge]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Rust
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
@@ -64,7 +64,7 @@ jobs:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Compare the scaffold pin against the beta dist-tag
         run: |
           pinned=$(grep -oP 'CORE_VERSION: &str = "\K[^"]+' src/template.rs)
@@ -87,7 +87,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-14]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Lint the installer
         if: matrix.os == 'ubuntu-latest'
         run: |
