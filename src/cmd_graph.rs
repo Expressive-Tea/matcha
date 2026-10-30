@@ -1,41 +1,36 @@
-//! `matcha graph` and `matcha explain <pattern>` — introspection of the
-//! dependency graph the framework builds from `needs`/`provides`.
+//! `matcha graph`, `routes`, `tokens`, `explain` and `openapi`: the CLI over
+//! [`crate::introspect`].
 //!
-//! Both work the same way: write a short script next to the project, import its
-//! entry file, `await app.ready()`, print, delete the script. `ready()` is the
-//! reason this is cheap and safe to run — it resolves the graph and is
-//! documented as deliberately *not* running provider factories, so drawing a
-//! diagram does not open your database connections. It is also required rather
-//! than optional: on a mesh app the graph is not knowable until its teapots
-//! have been asked, and `graph()`/`explain()` throw until then.
-//!
-//! The formatting lives in the generated script rather than here on purpose.
-//! Rust would have to parse the JSON back to lay out a chain, and nothing about
-//! that layout needs Rust — `console.log` already has the values.
+//! Each command asks one [`Query`] and renders the JSON that comes back, as
+//! text for a person or, with `--json`, unchanged for a program. An agent
+//! inspecting an app uses the second form; the future `matcha mcp` serves the
+//! same documents without going through this file at all.
 
 use std::io::{Error, ErrorKind};
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::path::Path;
 
-use crate::entry;
-use crate::runtime::{self, Runtime};
+use serde_json::Value;
 
-/// Written into the project root so the runtime resolves `@green-tea/core` from
-/// the project's own `node_modules`/import map, then removed. Dotted so it is
-/// invisible to a `src/**` glob if a run dies before cleanup.
-const SCRIPT_NAME: &str = ".matcha-introspect.ts";
+use crate::introspect::{self, Diagram, Query, Refusal, Target};
+
+/// How a command prints its answer.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Render {
+    Text,
+    Json,
+}
 
 /// `matcha graph` — the whole graph, as Mermaid, Graphviz DOT, or JSON.
 pub fn graph(
     dir: &Path,
     format: &str,
-    entry_override: Option<&str>,
+    entry: Option<&str>,
     out: Option<&str>,
 ) -> std::io::Result<()> {
-    let print = match format {
-        "mermaid" => "console.log(app.toMermaid());",
-        "dot" => "console.log(app.toDOT());",
-        "json" => "console.log(JSON.stringify(app.graph(), null, 2));",
+    let (query, render) = match format {
+        "mermaid" => (Query::Diagram(Diagram::Mermaid), Render::Text),
+        "dot" => (Query::Diagram(Diagram::Dot), Render::Text),
+        "json" => (Query::Graph, Render::Json),
         other => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
@@ -43,42 +38,54 @@ pub fn graph(
             ))
         }
     };
-    emit(dir, entry_override, out, print)
+    answer(dir, entry, out, &query, render, |data| {
+        data.as_str().unwrap_or_default().to_string()
+    })
+}
+
+/// `matcha routes` — every route, its transport, and the chain it runs.
+pub fn routes(
+    dir: &Path,
+    entry: Option<&str>,
+    out: Option<&str>,
+    render: Render,
+) -> std::io::Result<()> {
+    answer(dir, entry, out, &Query::Routes, render, routes_text)
+}
+
+/// `matcha tokens` — every token, who provides it and who needs it. The
+/// question to ask before writing `@needs('x')`: does anything provide `x`?
+pub fn tokens(
+    dir: &Path,
+    entry: Option<&str>,
+    out: Option<&str>,
+    render: Render,
+) -> std::io::Result<()> {
+    answer(dir, entry, out, &Query::Tokens, render, tokens_text)
 }
 
 /// `matcha explain <pattern>` — one route's chain, in execution order, with
 /// each node's needs and provides.
 ///
 /// The argument is the route *pattern* as declared (`/users/:id`), not a
-/// concrete URL: `explainRoute` matches the pattern string exactly. A miss
-/// therefore lists what is actually registered, which is the only useful thing
-/// to say to someone who just guessed wrong.
+/// concrete URL: `explain` matches the pattern string exactly. A miss lists
+/// what is actually registered, which is the only useful thing to say to
+/// someone who just guessed wrong.
 pub fn explain(
     dir: &Path,
     route: &str,
-    entry_override: Option<&str>,
+    entry: Option<&str>,
     out: Option<&str>,
+    render: Render,
 ) -> std::io::Result<()> {
-    let route = js_string(route);
-    let body = format!(
-        r#"let explained;
-try {{
-  explained = app.explain({route});
-}} catch {{
-  const patterns = app.graph().routes.map((r) => `  ${{r.method.padEnd(6)}} ${{r.pattern}}`);
-  console.error(`no route matching pattern {route}\n\nregistered patterns:\n${{patterns.join('\n')}}`);
-  process.exit(1);
-}}
-const lines = [`${{explained.method}} ${{explained.pattern}}  [${{explained.transport}}]`];
-const width = Math.max(...explained.chain.map((n) => n.kind.length));
-for (const node of explained.chain) {{
-  const needs = node.needs.length ? `  needs: ${{node.needs.join(', ')}}` : '';
-  const provides = node.provides.length ? `  provides: ${{node.provides.join(', ')}}` : '';
-  lines.push(`  ${{node.kind.padEnd(width)}}  ${{node.name}}${{needs}}${{provides}}  (${{node.origin}})`);
-}}
-console.log(lines.join('\n'));"#
-    );
-    emit(dir, entry_override, out, &body)
+    answer(
+        dir,
+        entry,
+        out,
+        &Query::Explain(route.to_string()),
+        render,
+        explain_text,
+    )
 }
 
 /// `matcha openapi` — the structural OpenAPI 3.1 document for the route table.
@@ -91,203 +98,201 @@ pub fn openapi(
     dir: &Path,
     title: Option<&str>,
     version: Option<&str>,
-    entry_override: Option<&str>,
+    entry: Option<&str>,
     out: Option<&str>,
 ) -> std::io::Result<()> {
-    // `app.openapi()` takes an optional info object; passing nothing lets core
-    // apply its own defaults rather than having the CLI invent a title.
-    let info = match (title, version) {
-        (None, None) => String::new(),
-        (t, v) => {
-            let mut fields = Vec::new();
-            if let Some(t) = t {
-                fields.push(format!("title: {}", js_string(t)));
-            }
-            if let Some(v) = v {
-                fields.push(format!("version: {}", js_string(v)));
-            }
-            format!("{{ {} }}", fields.join(", "))
-        }
+    let query = Query::OpenApi {
+        title: title.map(str::to_string),
+        version: version.map(str::to_string),
     };
-    emit(
-        dir,
-        entry_override,
-        out,
-        &format!("console.log(JSON.stringify(app.openapi({info}), null, 2));"),
-    )
+    answer(dir, entry, out, &query, Render::Json, |_| String::new())
 }
 
-/// Resolves the entry, generates the script around `body`, runs it under the
-/// detected runtime, and routes its stdout to a file or to ours.
-fn emit(
+/// Asks, renders, and writes to `out` or stdout. A refusal goes to stderr — as
+/// JSON under `--json`, so a program reads the same shape either way — and
+/// exits 1. A failed run has already printed its own diagnosis (the child's
+/// stderr is inherited), so it exits with no second message on top.
+fn answer(
     dir: &Path,
-    entry_override: Option<&str>,
+    entry: Option<&str>,
     out: Option<&str>,
-    body: &str,
+    query: &Query,
+    render: Render,
+    text: impl Fn(&Value) -> String,
 ) -> std::io::Result<()> {
-    let entry_path = match entry_override {
-        Some(explicit) => {
-            let p = dir.join(explicit);
-            if !p.exists() {
-                return Err(Error::new(ErrorKind::NotFound, format!("no such entry: {explicit}")));
-            }
-            PathBuf::from(explicit)
+    let target = Target { dir, entry };
+    let data = match introspect::query(&target, query) {
+        Ok(Ok(data)) => data,
+        Ok(Err(refusal)) => {
+            report_refusal(&refusal, render);
+            std::process::exit(1);
         }
-        None => entry::find(dir).map(|p| p.strip_prefix(dir).unwrap_or(&p).to_path_buf()).ok_or_else(|| {
-            Error::new(
-                ErrorKind::NotFound,
-                format!(
-                    "no {} found — pass --entry <file>. It must export the app: `export const app = createApp(...)`",
-                    entry::candidates()
-                ),
-            )
-        })?,
+        Err(e) if e.kind() == ErrorKind::Other => std::process::exit(1),
+        Err(e) => return Err(e),
     };
 
-    let rt = runtime::detect(dir).ok_or_else(|| {
-        Error::new(
-            ErrorKind::NotFound,
-            "no runtime detected (need deno.json, bun.lock, or package.json)",
-        )
-    })?;
-
-    let script_path = dir.join(SCRIPT_NAME);
-    std::fs::write(&script_path, script(&entry_path, body))?;
-    let result = run(rt, dir, SCRIPT_NAME);
-    std::fs::remove_file(&script_path).ok();
-
-    let output = result?;
-    // The child has already written its own diagnosis to the inherited stderr —
-    // a type error, a boot failure, or the script's own "no route matching
-    // pattern" with the registered ones listed. Wrapping that in a second
-    // `error: npx exited with 1` adds a line and no information, so the exit
-    // code is relayed and nothing is said on top of it.
-    if !output.status.success() {
-        std::process::exit(output.status.code().unwrap_or(1));
+    let mut printed = match render {
+        Render::Json => serde_json::to_string_pretty(&data).map_err(Error::other)?,
+        Render::Text => text(&data),
+    };
+    if !printed.ends_with('\n') {
+        printed.push('\n');
     }
-    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     match out {
         Some(file) => {
-            std::fs::write(dir.join(file), &stdout)?;
+            std::fs::write(dir.join(file), &printed)?;
             println!("✓ {file}");
         }
-        None => print!("{stdout}"),
+        None => print!("{printed}"),
     }
     Ok(())
 }
 
-/// The generated script: import the app, resolve the graph, run `body`.
-fn script(entry_path: &Path, body: &str) -> String {
-    format!(
-        "// generated by matcha; safe to delete\nimport {{ app }} from {};\n\nif (!app) {{\n  console.error('{} does not export `app` — matcha needs `export const app = createApp(...)`');\n  process.exit(1);\n}}\nawait app.ready();\n{body}\n",
-        js_string(&specifier(entry_path)),
-        entry_path.display(),
-    )
-}
-
-/// Runs `script` under `rt` in `dir`. The child's stderr is inherited rather
-/// than captured: a type error or a boot failure is the reason someone runs
-/// this, and it should reach them as it happens.
-fn run(rt: Runtime, dir: &Path, script: &str) -> std::io::Result<std::process::Output> {
-    let (prog, args) = runner(rt, script);
-    let child = Command::new(prog)
-        .args(&args)
-        .current_dir(dir)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .map_err(|e| Error::new(e.kind(), format!("could not run {prog}: {e}")))?;
-    child.wait_with_output()
-}
-
-fn runner(rt: Runtime, script: &str) -> (&'static str, Vec<String>) {
-    let s = script.to_string();
-    match rt {
-        // Edge resolves its graph under node: `src/app.ts` imports core, never
-        // `edgeHandler`, so nothing here needs workerd — and workerd could not
-        // print to a terminal anyway.
-        Runtime::Node | Runtime::Edge => ("npx", vec!["tsx".into(), s]),
-        // `ready()` opens no provider connections, but a mesh app does reach its
-        // teapots there, so net is part of resolving the graph rather than extra.
-        Runtime::Deno => (
-            "deno",
-            vec![
-                "run".into(),
-                "--allow-read".into(),
-                "--allow-env".into(),
-                "--allow-net".into(),
-                s,
-            ],
-        ),
-        Runtime::Bun => ("bun", vec!["run".into(), s]),
+fn report_refusal(refusal: &Refusal, render: Render) {
+    if render == Render::Json {
+        eprintln!("{}", serde_json::json!({ "error": refusal.0 }));
+        return;
     }
-}
-
-/// A project-root-relative path as an ES module specifier: forward slashes,
-/// always `./`-prefixed, extension kept so Deno resolves it without leaning on
-/// `sloppy-imports`.
-fn specifier(path: &Path) -> String {
-    let raw = path.to_string_lossy().replace('\\', "/");
-    format!("./{}", raw.strip_prefix("./").unwrap_or(&raw))
-}
-
-/// Single-quoted JS string literal. Route patterns reach this from argv, so the
-/// quote and the backslash have to be escaped rather than assumed absent.
-fn js_string(value: &str) -> String {
-    let mut out = String::with_capacity(value.len() + 2);
-    out.push('\'');
-    for ch in value.chars() {
-        match ch {
-            '\\' => out.push_str("\\\\"),
-            '\'' => out.push_str("\\'"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            _ => out.push(ch),
+    eprintln!("{}", refusal.message());
+    if let Some(registered) = refusal.0["registered"].as_array() {
+        eprintln!("\nregistered patterns:");
+        for r in registered {
+            eprintln!("  {:<6} {}", str_of(&r["method"]), str_of(&r["pattern"]));
         }
     }
-    out.push('\'');
-    out
+}
+
+fn str_of(v: &Value) -> &str {
+    v.as_str().unwrap_or("")
+}
+
+fn list_of(v: &Value) -> Vec<&str> {
+    v.as_array()
+        .map(|a| a.iter().map(str_of).collect())
+        .unwrap_or_default()
+}
+
+fn routes_text(data: &Value) -> String {
+    let routes = data.as_array().cloned().unwrap_or_default();
+    let width = routes
+        .iter()
+        .map(|r| str_of(&r["method"]).len())
+        .max()
+        .unwrap_or(0);
+    routes
+        .iter()
+        .map(|r| {
+            let chain = list_of(&r["chain"]).join(" → ");
+            format!(
+                "{:<width$}  {}  [{}]  {}",
+                str_of(&r["method"]),
+                str_of(&r["pattern"]),
+                str_of(&r["transport"]),
+                chain
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn tokens_text(data: &Value) -> String {
+    let names = |v: &Value| {
+        v.as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|n| match n["route"].as_str() {
+                        Some(route) => format!("{} ({route})", str_of(&n["name"])),
+                        None => str_of(&n["name"]).to_string(),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            })
+            .unwrap_or_default()
+    };
+    data.as_array()
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .map(|t| {
+            let provided = names(&t["providedBy"]);
+            let needed = names(&t["neededBy"]);
+            format!(
+                "{}\n  provided by: {}\n  needed by:   {}",
+                str_of(&t["token"]),
+                if provided.is_empty() {
+                    "— (nothing provides it)"
+                } else {
+                    &provided
+                },
+                if needed.is_empty() { "—" } else { &needed },
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn explain_text(data: &Value) -> String {
+    let chain = data["chain"].as_array().cloned().unwrap_or_default();
+    let width = chain
+        .iter()
+        .map(|n| str_of(&n["kind"]).len())
+        .max()
+        .unwrap_or(0);
+    let mut lines = vec![format!(
+        "{} {}  [{}]",
+        str_of(&data["method"]),
+        str_of(&data["pattern"]),
+        str_of(&data["transport"])
+    )];
+    for n in &chain {
+        let needs = list_of(&n["needs"]);
+        let provides = list_of(&n["provides"]);
+        let mut line = format!("  {:<width$}  {}", str_of(&n["kind"]), str_of(&n["name"]));
+        if !needs.is_empty() {
+            line.push_str(&format!("  needs: {}", needs.join(", ")));
+        }
+        if !provides.is_empty() {
+            line.push_str(&format!("  provides: {}", provides.join(", ")));
+        }
+        line.push_str(&format!("  ({})", str_of(&n["origin"])));
+        lines.push(line);
+    }
+    lines.join("\n")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn specifier_is_dot_slash_prefixed_with_extension() {
-        assert_eq!(specifier(Path::new("src/app.ts")), "./src/app.ts");
-        assert_eq!(specifier(Path::new("./src/app.ts")), "./src/app.ts");
-    }
-
-    #[test]
-    fn js_string_escapes_quote_and_backslash() {
-        assert_eq!(js_string("a'b"), r"'a\'b'");
-        assert_eq!(js_string(r"a\b"), r"'a\\b'");
-    }
-
-    #[test]
-    fn script_imports_the_entry_and_awaits_ready() {
-        let out = script(Path::new("src/app.ts"), "console.log(1);");
-        assert!(out.contains("import { app } from './src/app.ts';"));
-        assert!(out.contains("await app.ready();"));
-        assert!(out.contains("console.log(1);"));
-    }
-
-    #[test]
-    fn node_runs_through_tsx() {
-        assert_eq!(
-            runner(Runtime::Node, ".matcha-introspect.ts"),
-            (
-                "npx",
-                vec!["tsx".to_string(), ".matcha-introspect.ts".to_string()]
-            )
-        );
-    }
+    use serde_json::json;
 
     #[test]
     fn unknown_format_is_rejected() {
         let d = tempfile::tempdir().unwrap();
         let err = graph(d.path(), "svg", None, None).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn explain_text_keeps_the_layout_it_had() {
+        let data = json!({
+            "method": "GET", "pattern": "/users/:id", "transport": "http",
+            "chain": [
+                { "kind": "provider", "name": "db", "needs": [], "provides": ["db"], "origin": "src/db.ts" },
+                { "kind": "handler", "name": "Users.get", "needs": ["db"], "provides": [], "origin": "src/users.ts" }
+            ]
+        });
+        assert_eq!(
+            explain_text(&data),
+            "GET /users/:id  [http]\n  provider  db  provides: db  (src/db.ts)\n  handler   Users.get  needs: db  (src/users.ts)"
+        );
+    }
+
+    #[test]
+    fn tokens_text_says_when_nothing_provides_a_token() {
+        let data = json!([{ "token": "user", "providedBy": [], "neededBy": [{ "kind": "handler", "name": "Me.get", "route": "/me" }] }]);
+        assert_eq!(
+            tokens_text(&data),
+            "user\n  provided by: — (nothing provides it)\n  needed by:   Me.get (/me)"
+        );
     }
 }

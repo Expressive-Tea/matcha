@@ -9,6 +9,25 @@ green-tea's convention. **The CLI ships on its own version line**: `matcha` 26.8
 mean `@green-tea/core` 26.8, and the two release independently. The core version a scaffold
 is pinned to is `CORE_VERSION` in `src/template.rs`, and each entry below says when it moved.
 
+## [Unreleased]
+
+### Added
+
+- **`matcha routes` and `matcha tokens`.** `routes` lists every route with its transport and chain.
+  `tokens` lists every token, with who provides it and who needs it, handlers included. It is
+  the check to run before writing `@needs('x')`.
+- **`--json` on `explain`, `routes` and `tokens`** (`graph --format json` already had it). It
+  prints one JSON document on stdout, so an agent inspecting an app reads the graph instead of
+  guessing it. A refused query (an unknown pattern) prints a structured error on stderr and
+  exits 1.
+
+### Changed
+
+- Introspection runs through one query layer (`src/introspect.rs`): every command asks one
+  question and gets one JSON document back, then renders it as text unless `--json` is passed.
+  Text output is unchanged. The layer is also the seam a future `matcha mcp` would serve over
+  MCP. It adds `serde_json` as a dependency.
+
 ## [26.9.0-beta.1] - 2026-09-24
 
 ### Added

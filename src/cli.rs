@@ -80,6 +80,29 @@ pub enum Command {
         entry: Option<String>,
         #[arg(long)]
         out: Option<String>,
+        /// Print the answer as JSON, for a program or an agent
+        #[arg(long)]
+        json: bool,
+    },
+    /// List every route, its transport, and the chain it runs
+    Routes {
+        #[arg(long)]
+        entry: Option<String>,
+        #[arg(long)]
+        out: Option<String>,
+        /// Print the answer as JSON, for a program or an agent
+        #[arg(long)]
+        json: bool,
+    },
+    /// List every token: who provides it and who needs it
+    Tokens {
+        #[arg(long)]
+        entry: Option<String>,
+        #[arg(long)]
+        out: Option<String>,
+        /// Print the answer as JSON, for a program or an agent
+        #[arg(long)]
+        json: bool,
     },
     /// Add a capability to a controller
     Add {
