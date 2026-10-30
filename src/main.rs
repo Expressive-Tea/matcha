@@ -2,6 +2,7 @@ mod ask;
 mod check;
 mod cli;
 mod cmd_add;
+mod cmd_agents;
 mod cmd_create;
 mod cmd_doctor;
 mod cmd_graph;
@@ -84,6 +85,12 @@ fn main() {
                 }
             };
             if let Err(e) = result {
+                eprintln!("error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Command::Agents { force } => {
+            if let Err(e) = cmd_agents::run(std::path::Path::new("."), force) {
                 eprintln!("error: {e}");
                 std::process::exit(1);
             }

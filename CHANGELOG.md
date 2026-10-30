@@ -13,6 +13,13 @@ is pinned to is `CORE_VERSION` in `src/template.rs`, and each entry below says w
 
 ### Added
 
+- **Every starter ships an `AGENTS.md` and a `CLAUDE.md` that imports it.** green-tea is new, so a
+  coding agent falls back on Express habits. The file states the rules that differ: it is a graph, not a
+  chain, a handler declares its needs in its signature, and the graph is checked at boot. It also points
+  the agent at `matcha routes|tokens|explain --json`, so it reads the app instead of guessing, and at the
+  `llms.txt` shipped inside the installed `@green-tea/core`.
+- **`matcha agents`** writes the same two files into a project that predates them. The files name the
+  core version the project actually depends on. An existing file is left alone unless `--force` is passed.
 - **`matcha routes` and `matcha tokens`.** `routes` lists every route with its transport and chain.
   `tokens` lists every token, with who provides it and who needs it, handlers included. It is
   the check to run before writing `@needs('x')`.
