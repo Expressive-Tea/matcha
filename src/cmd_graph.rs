@@ -220,7 +220,11 @@ fn tokens_text(data: &Value) -> String {
                 "{}\n  provided by: {}\n  needed by:   {}",
                 str_of(&t["token"]),
                 if provided.is_empty() {
-                    "— (nothing provides it)"
+                    if t["source"] == "request" {
+                        "the request (built in)"
+                    } else {
+                        "— (nothing provides it)"
+                    }
                 } else {
                     &provided
                 },
@@ -284,6 +288,15 @@ mod tests {
         assert_eq!(
             explain_text(&data),
             "GET /users/:id  [http]\n  provider  db  provides: db  (src/db.ts)\n  handler   Users.get  needs: db  (src/users.ts)"
+        );
+    }
+
+    #[test]
+    fn tokens_text_names_the_request_for_its_built_in_tokens() {
+        let data = json!([{ "token": "req", "source": "request", "providedBy": [], "neededBy": [{ "kind": "step", "name": "user" }] }]);
+        assert_eq!(
+            tokens_text(&data),
+            "req\n  provided by: the request (built in)\n  needed by:   user"
         );
     }
 

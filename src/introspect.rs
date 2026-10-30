@@ -170,6 +170,12 @@ fn body(query: &Query) -> String {
 
 /// Tokens, from the graph's nodes plus each route's handler (only `explain`
 /// knows what a handler needs). Sorted, so the answer is stable across runs.
+///
+/// A token that something needs and no node provides is one the request itself
+/// carries (`req`, `params`, `body`, …). That is an inference, and a sound one:
+/// `app.ready()` has validated the graph, so a needed token with no producer
+/// would already have failed it. Marking those `"source": "request"` keeps an
+/// agent from reading "nothing provides it" and writing a provider for `req`.
 const TOKENS: &str = r#"const tokens = new Map();
 const entry = (t) => tokens.get(t) ?? tokens.set(t, { token: t, providedBy: [], neededBy: [] }).get(t);
 const graph = app.graph();
@@ -183,6 +189,7 @@ for (const pattern of new Set(graph.routes.map((r) => r.pattern))) {
     for (const t of n.needs) entry(t).neededBy.push({ kind: 'handler', name: n.name, origin: n.origin, route: pattern });
   }
 }
+for (const t of tokens.values()) t.source = t.providedBy.length ? 'graph' : 'request';
 data = [...tokens.values()].sort((a, b) => a.token.localeCompare(b.token));"#;
 
 fn resolve_entry(target: &Target) -> std::io::Result<PathBuf> {
