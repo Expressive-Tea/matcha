@@ -34,6 +34,24 @@ is pinned to is `CORE_VERSION` in `src/template.rs`, and each entry below says w
   question and gets one JSON document back, then renders it as text unless `--json` is passed.
   Text output is unchanged. The layer is also the seam a future `matcha mcp` would serve over
   MCP. It adds `serde_json` as a dependency.
+- **The node starter awaits `app.listen(3000)`.** A port already in use, or a provider that fails at
+  boot, now stops the process with its own error rather than an unhandled rejection.
+- **The node and edge starters declare `engines: { node: ">=22" }`**, matching `@green-tea/core`,
+  which no longer supports Node 18 or 20.
+- **`matcha create step|provider` derives the token from the class name in camelCase.**
+  `create step current-user` writes `CurrentUserStep` providing `currentUser`. It used to write
+  `current-userStep` and `return { current-user: null }`, which does not parse. A single word is
+  unchanged (`Users` still provides `users`).
+
+### Fixed
+
+- **`matcha create` no longer overwrites a file that already exists.** Running it twice with the same
+  name silently replaced the first file, edits included. Now it refuses and names the file.
+- **`matcha create` rejects names that cannot become a class** (`2fast`, `us.ers`) instead of
+  writing a file that does not compile. For a step or provider, it also rejects names whose token
+  core already provides (`logger`, `rooms`, `events`, `bus`, and the request tokens `req`,
+  `params`, `query`, `body`, `headers`, `cookies`, `inbound`, `abort`). `createApp` would refuse the
+  first group, and the second would shadow what every route reads.
 
 ## [26.9.0-beta.1] - 2026-09-24
 
