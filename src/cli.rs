@@ -48,6 +48,12 @@ pub enum Command {
     },
     /// Check the project for the misconfigurations that fail confusingly
     Doctor,
+    /// Write AGENTS.md and CLAUDE.md: green-tea's rules for coding agents
+    Agents {
+        /// Overwrite the files if they exist
+        #[arg(long)]
+        force: bool,
+    },
     /// Print the dependency graph (Mermaid, DOT, or JSON)
     Graph {
         #[arg(long, default_value = "mermaid", value_parser = ["mermaid", "dot", "json"])]

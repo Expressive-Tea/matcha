@@ -50,17 +50,35 @@ fn write_dir(dir: &Dir, dest: &Path, name: &str) -> std::io::Result<()> {
                     std::fs::create_dir_all(parent)?;
                 }
                 let contents = std::str::from_utf8(f.contents())
-                    .map(|s| {
-                        s.replace("{{project_name}}", name)
-                            .replace("{{core_version}}", CORE_VERSION)
-                            .into_bytes()
-                    })
+                    .map(|s| render(s, name, CORE_VERSION).into_bytes())
                     .unwrap_or_else(|_| f.contents().to_vec());
                 std::fs::write(out, contents)?;
             }
         }
     }
     Ok(())
+}
+
+fn render(template: &str, project_name: &str, core_version: &str) -> String {
+    template
+        .replace("{{project_name}}", project_name)
+        .replace("{{core_version}}", core_version)
+}
+
+/// The files that tell a coding agent how this project and green-tea work:
+/// `AGENTS.md` (read by Codex, OpenCode and others) and a `CLAUDE.md` that
+/// imports it. `matcha new` writes them with the starter; `matcha agents`
+/// writes them into a project that predates them.
+pub const AGENT_FILES: [&str; 2] = ["AGENTS.md", "CLAUDE.md"];
+
+/// Renders one of [`AGENT_FILES`] for a project already on `core_version`.
+pub fn agent_file(file: &str, project_name: &str, core_version: &str) -> Option<String> {
+    let f = SHARED.get_file(file)?;
+    Some(render(
+        std::str::from_utf8(f.contents()).ok()?,
+        project_name,
+        core_version,
+    ))
 }
 
 #[cfg(test)]
@@ -119,6 +137,28 @@ mod tests {
             assert!(pin.contains(CORE_VERSION), "{rt:?}: {pin}");
             assert!(!pin.contains('^'), "{rt:?} pins core with a caret: {pin}");
             assert!(!pin.contains('~'), "{rt:?} pins core with a tilde: {pin}");
+        }
+    }
+
+    /// Every starter tells a coding agent where green-tea's rules are, with the
+    /// version it was scaffolded on, and points it at the introspection
+    /// commands rather than at guessing.
+    #[test]
+    fn every_runtime_scaffolds_the_agent_files() {
+        for rt in [Runtime::Node, Runtime::Deno, Runtime::Bun, Runtime::Edge] {
+            let d = tempdir().unwrap();
+            write_starter(d.path(), "my-api", rt).unwrap();
+            let agents = std::fs::read_to_string(d.path().join("AGENTS.md")).unwrap();
+            assert!(agents.contains("# AGENTS.md — my-api"), "{rt:?}");
+            assert!(agents.contains(CORE_VERSION), "{rt:?}");
+            assert!(!agents.contains("{{"), "{rt:?} left a placeholder");
+            assert!(agents.contains("matcha tokens --json"), "{rt:?}");
+            assert!(
+                agents.contains("node_modules/@green-tea/core/llms.txt"),
+                "{rt:?}"
+            );
+            let claude = std::fs::read_to_string(d.path().join("CLAUDE.md")).unwrap();
+            assert_eq!(claude.trim(), "@AGENTS.md", "{rt:?}");
         }
     }
 

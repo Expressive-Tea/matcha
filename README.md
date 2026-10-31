@@ -46,6 +46,7 @@ matcha routes                              # every route and the chain it runs
 matcha tokens                              # every token: who provides it, who needs it
 matcha openapi                             # structural OpenAPI 3.1 for the route table
 matcha doctor                              # check the project for confusing misconfigurations
+matcha agents                              # write AGENTS.md/CLAUDE.md for coding agents (new projects get them)
 ```
 
 ### The starter
@@ -53,6 +54,12 @@ matcha doctor                              # check the project for confusing mis
 `matcha new <name>` (no flags) scaffolds a live app: it serves an `index.html`
 with the green-tea logo and streams a rotating zen message over `@Sse('/zen')`.
 Open the browser and it's already alive — `matcha run` boots it.
+
+It also writes an `AGENTS.md` (and a `CLAUDE.md` that imports it) for coding
+agents. green-tea is new enough that an agent's training data says Express, so
+the file states the rules that differ, points at `matcha routes|tokens|explain
+--json` for reading the app, and at the `llms.txt` inside the installed core.
+`matcha agents` adds the same files to an older project.
 
 The graph is composed in `src/app.ts`, which exports the app; `src/main.ts`
 imports it and binds a port. The split is what lets `matcha graph` and
