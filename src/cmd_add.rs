@@ -139,6 +139,39 @@ const CAPABILITIES: &[Capability] = &[
         marker: "'/upload'",
         peer: Some(("busboy", "every runtime")),
     },
+    Capability {
+        name: "cookie",
+        // Reading is a decorator. Writing is a `Set-Cookie` header, which core only builds
+        // (`setCookie`) and a transformer sends: core has no response-cookie API of its own.
+        imports: &["Get", "Post", "Transformer", "body", "cookie", "setCookie"],
+        type_imports: &[],
+        method: r#"
+  @Get('/prefs')
+  prefs(@cookie('theme') theme?: string) {
+    return { theme: theme ?? 'light' };
+  }
+
+  @Post('/prefs')
+  @Transformer((value) => {
+    const { theme } = value as { theme: string };
+    return {
+      status: 200,
+      headers: {
+        'content-type': 'application/json',
+        // Secure and HttpOnly are on by default. Safari, a LAN IP or a plain-HTTP host other
+        // than localhost drops a Secure cookie: pass `secure: false` there in development.
+        'set-cookie': setCookie('theme', encodeURIComponent(theme), { maxAge: 60 * 60 * 24 * 365 }),
+      },
+      body: JSON.stringify({ theme }),
+    };
+  })
+  savePrefs(@body('theme') theme: string) {
+    return { theme };
+  }
+"#,
+        marker: "'/prefs'",
+        peer: None,
+    },
 ];
 
 /// The capability names, for clap's `value_parser` and for error messages.

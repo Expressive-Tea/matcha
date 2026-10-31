@@ -96,9 +96,10 @@ echo "✓ graph, explain and openapi resolve"
 # core lazy-requires `ws` and `busboy`, so neither is needed to compile, and a
 # check that needed them would be hiding that fact.
 echo "▸ matcha add (every capability)"
-for cap in sse ws upload stream buffer; do
+for cap in sse ws upload stream buffer cookie; do
   "$MATCHA" add "$cap" >/dev/null || { echo "matcha add $cap failed"; exit 1; }
 done
+"$MATCHA" create transformer Csv >/dev/null || { echo "matcha create transformer failed"; exit 1; }
 "${CHECK[@]}" || { echo "the generated handlers do not type-check"; exit 1; }
 echo "✓ every add capability type-checks"
 

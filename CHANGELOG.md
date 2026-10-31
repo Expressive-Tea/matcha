@@ -13,6 +13,12 @@ is pinned to is `CORE_VERSION` in `src/template.rs`, and each entry below says w
 
 ### Added
 
+- **`matcha add cookie`** adds `GET /prefs`, which reads a cookie with `@cookie('theme')`, and
+  `POST /prefs`, which sets it through a `@Transformer` and `setCookie()`. Core has no response-cookie
+  API, so the transformer is where a `Set-Cookie` header is sent. Needs `@green-tea/core` RC.1.
+- **`matcha create transformer <Name>`** writes `src/transformers/<name>.transformer.ts`, a typed
+  `TransformerFn`, and prints the `@Transformer(...)` line that attaches it. A transformer belongs to
+  a route, not a module, so there is nothing to wire.
 - **Every starter ships an `AGENTS.md` and a `CLAUDE.md` that imports it.** green-tea is new, so a
   coding agent falls back on Express habits. The file states the rules that differ: it is a graph, not a
   chain, a handler declares its needs in its signature, and the graph is checked at boot. It also points
