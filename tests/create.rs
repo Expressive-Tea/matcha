@@ -119,3 +119,54 @@ fn create_module_prefers_app_ts_over_main_ts() {
     let main = std::fs::read_to_string(d.path().join("src/main.ts")).unwrap();
     assert!(!main.contains("UsersModule"), "main.ts was edited: {main}");
 }
+
+fn create(dir: &std::path::Path, kind: &str, name: &str) -> assert_cmd::assert::Assert {
+    Command::cargo_bin("matcha")
+        .unwrap()
+        .current_dir(dir)
+        .args(["create", kind, name])
+        .assert()
+}
+
+#[test]
+fn create_step_keeps_camel_case_in_the_token_and_reads_kebab_input() {
+    let d = tempdir().unwrap();
+    seed_module(d.path());
+    create(d.path(), "step", "current-user").success();
+    let step = std::fs::read_to_string(d.path().join("src/steps/currentuser.step.ts")).unwrap();
+    assert!(step.contains("class CurrentUserStep"), "{step}");
+    assert!(step.contains("provides: 'currentUser'"), "{step}");
+    assert!(step.contains("return { currentUser: null }"), "{step}");
+}
+
+#[test]
+fn create_refuses_a_token_core_already_provides() {
+    let d = tempdir().unwrap();
+    seed_module(d.path());
+    create(d.path(), "provider", "Logger")
+        .failure()
+        .stderr(predicates::str::contains("core already provides"));
+    create(d.path(), "step", "req").failure();
+    assert!(!d.path().join("src/providers/logger.provider.ts").exists());
+}
+
+#[test]
+fn create_refuses_a_name_that_cannot_be_a_class() {
+    let d = tempdir().unwrap();
+    seed_module(d.path());
+    create(d.path(), "controller", "2fast").failure();
+    create(d.path(), "controller", "us.ers").failure();
+}
+
+#[test]
+fn create_does_not_overwrite_an_existing_file() {
+    let d = tempdir().unwrap();
+    seed_module(d.path());
+    create(d.path(), "controller", "Users").success();
+    let file = d.path().join("src/controllers/users.controller.ts");
+    std::fs::write(&file, "// edited\n").unwrap();
+    create(d.path(), "controller", "Users")
+        .failure()
+        .stderr(predicates::str::contains("already exists"));
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "// edited\n");
+}

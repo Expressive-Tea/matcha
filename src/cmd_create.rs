@@ -5,7 +5,7 @@
 use std::io::{Error, ErrorKind};
 use std::path::Path;
 
-use crate::{entry, wire};
+use crate::{entry, naming, wire};
 
 /// A piece that lives inside a module: a file under `src/<subdir>/` plus an
 /// entry in one of `@Module`'s arrays.
@@ -60,7 +60,64 @@ pub fn kinds() -> Vec<&'static str> {
         .collect()
 }
 
+/// Tokens core already owns. A step or provider that provides one fails `createApp` (the framework
+/// tokens) or shadows what every route reads from the request (the request tokens).
+const TAKEN_TOKENS: &[&str] = &[
+    "logger", "rooms", "events", "bus", "req", "params", "query", "body", "headers", "cookies",
+    "inbound", "abort",
+];
+
+/// `Users` stays `Users`; `current-user`, `current_user` and `current user` become `CurrentUser`.
+/// `None` for anything that cannot become a TypeScript class name.
+fn class_name(name: &str) -> Option<String> {
+    let name = name.trim();
+    if name.starts_with(|c: char| c.is_ascii_alphabetic())
+        && name.chars().all(|c| c.is_ascii_alphanumeric())
+    {
+        let (first, rest) = name.split_at(1);
+        return Some(first.to_ascii_uppercase() + rest);
+    }
+    naming::slug(name).map(|s| naming::pascal(&s))
+}
+
+/// The token a step or provider named `CurrentUser` provides: `currentUser`.
+fn token(class: &str) -> String {
+    let (first, rest) = class.split_at(1);
+    first.to_ascii_lowercase() + rest
+}
+
+/// Refuses to replace a file the person may already have edited.
+fn write_new(file: &Path, contents: String) -> std::io::Result<()> {
+    if file.exists() {
+        return Err(Error::new(
+            ErrorKind::AlreadyExists,
+            format!(
+                "{} already exists; matcha create does not overwrite it",
+                file.display()
+            ),
+        ));
+    }
+    std::fs::create_dir_all(file.parent().unwrap())?;
+    std::fs::write(file, contents)
+}
+
 pub fn run(kind: &str, name: &str, check: bool) -> std::io::Result<()> {
+    let Some(class) = class_name(name) else {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            format!("'{name}' cannot name a class: use letters and digits, starting with a letter (Users, CurrentUser, current-user)"),
+        ));
+    };
+    let name = class.as_str();
+    if (kind == "step" || kind == "provider") && TAKEN_TOKENS.contains(&token(name).as_str()) {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            format!(
+                "a {kind} named {name} would provide '{}', which core already provides; pick another name",
+                token(name)
+            ),
+        ));
+    }
     if kind == "module" {
         return create_module(name, check);
     }
@@ -87,8 +144,7 @@ fn create_piece(name: &str, check: bool, piece: &Piece) -> std::io::Result<()> {
     let file = Path::new("src")
         .join(subdir)
         .join(format!("{lower}.{ext}.ts"));
-    std::fs::create_dir_all(file.parent().unwrap())?;
-    std::fs::write(&file, (piece.stub)(name))?;
+    write_new(&file, (piece.stub)(name))?;
     println!("✓ {}", file.display());
 
     let symbol = format!("{name}{suffix}");
@@ -117,8 +173,7 @@ fn create_piece(name: &str, check: bool, piece: &Piece) -> std::io::Result<()> {
 fn create_module(name: &str, check: bool) -> std::io::Result<()> {
     let lower = name.to_lowercase();
     let file = Path::new("src").join(format!("{lower}.module.ts"));
-    std::fs::create_dir_all(file.parent().unwrap())?;
-    std::fs::write(&file, module_stub(name))?;
+    write_new(&file, module_stub(name))?;
     println!("✓ {}", file.display());
 
     let symbol = format!("{name}Module");
@@ -164,14 +219,14 @@ fn controller_stub(name: &str) -> String {
 }
 
 fn step_stub(name: &str) -> String {
-    let lower = name.to_lowercase();
+    let lower = token(name);
     format!(
         "import {{ Step }} from '@green-tea/core';\n\n@Step({{ provides: '{lower}', needs: [] }})\nexport class {name}Step {{\n  run(ctx: Record<string, unknown>) {{\n    return {{ {lower}: null }};\n  }}\n}}\n"
     )
 }
 
 fn provider_stub(name: &str) -> String {
-    let lower = name.to_lowercase();
+    let lower = token(name);
     format!(
         "import {{ Provider }} from '@green-tea/core';\n\n@Provider({{ provides: '{lower}' }})\nexport class {name}Provider {{\n  provide() {{\n    return {{ {lower}: null }};\n  }}\n}}\n"
     )
