@@ -9,6 +9,7 @@ mod cmd_new;
 mod cmd_plugin;
 mod cmd_run;
 mod entry;
+mod introspect;
 mod naming;
 mod plugin_files;
 mod runtime;
@@ -121,12 +122,40 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Command::Explain { route, entry, out } => {
+        Command::Explain {
+            route,
+            entry,
+            out,
+            json,
+        } => {
             if let Err(e) = cmd_graph::explain(
                 std::path::Path::new("."),
                 &route,
                 entry.as_deref(),
                 out.as_deref(),
+                render(json),
+            ) {
+                eprintln!("error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Command::Routes { entry, out, json } => {
+            if let Err(e) = cmd_graph::routes(
+                std::path::Path::new("."),
+                entry.as_deref(),
+                out.as_deref(),
+                render(json),
+            ) {
+                eprintln!("error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Command::Tokens { entry, out, json } => {
+            if let Err(e) = cmd_graph::tokens(
+                std::path::Path::new("."),
+                entry.as_deref(),
+                out.as_deref(),
+                render(json),
             ) {
                 eprintln!("error: {e}");
                 std::process::exit(1);
@@ -141,5 +170,13 @@ fn main() {
                 std::process::exit(1);
             }
         }
+    }
+}
+
+fn render(json: bool) -> cmd_graph::Render {
+    if json {
+        cmd_graph::Render::Json
+    } else {
+        cmd_graph::Render::Text
     }
 }

@@ -42,6 +42,8 @@ matcha create plugin "Plugin Algo"         # an in-app plugin, or --package for 
 matcha add sse                             # add a capability to your controller
 matcha graph                               # draw the dependency graph
 matcha explain /users/:id                  # one route's chain, in execution order
+matcha routes                              # every route and the chain it runs
+matcha tokens                              # every token: who provides it, who needs it
 matcha openapi                             # structural OpenAPI 3.1 for the route table
 matcha doctor                              # check the project for confusing misconfigurations
 ```
@@ -75,6 +77,9 @@ matcha graph --format dot           # Graphviz
 matcha graph --format json          # the raw GraphView
 matcha graph --out docs/graph.mmd   # to a file instead of stdout
 matcha explain /users/:id           # providers → steps → handler, with needs/provides
+matcha routes                       # every route: method, pattern, transport, chain
+matcha tokens                       # every token, who provides it, who needs it
+matcha explain /users/:id --json    # any of explain/routes/tokens as JSON, for a program or an agent
 matcha openapi --title "My API" --api-version 1.0.0 --out openapi.json
 ```
 
@@ -89,6 +94,17 @@ be installed, since this runs your code under your runtime.
 
 `explain` takes the route **pattern** as declared, not a concrete URL:
 `/users/:id`, not `/users/42`. A miss lists the patterns that are registered.
+
+`tokens` answers the question to ask before writing `@needs('x')`: does anything
+provide `x`, and who else depends on it? A token nothing provides is listed with
+`— (nothing provides it)`, which is the boot error you are about to get.
+
+**For agents.** `--json` prints the same data the text is rendered from: exactly
+one JSON document on stdout, so a program parses stdout and nothing else. When a
+query is refused (an unknown route pattern), stderr carries
+`{"error": {"code", "message", …}}` and the exit code is 1. Every query is one
+self-contained document, so the same set can later be served over MCP without a
+second implementation.
 
 ### `add` capabilities
 
