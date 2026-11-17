@@ -56,7 +56,7 @@ pub fn kinds() -> Vec<&'static str> {
     ["module"]
         .into_iter()
         .chain(PIECES.iter().map(|p| p.kind))
-        .chain(["plugin"])
+        .chain(["transformer", "plugin"])
         .collect()
 }
 
@@ -120,6 +120,9 @@ pub fn run(kind: &str, name: &str, check: bool) -> std::io::Result<()> {
     }
     if kind == "module" {
         return create_module(name, check);
+    }
+    if kind == "transformer" {
+        return create_transformer(name, check);
     }
     match PIECES.iter().find(|p| p.kind == kind) {
         Some(piece) => create_piece(name, check, piece),
@@ -198,6 +201,34 @@ fn create_module(name: &str, check: bool) -> std::io::Result<()> {
         ),
     }
     maybe_check(check)
+}
+
+/// Writes `src/transformers/<name>.transformer.ts`. Nothing to wire: a transformer is attached
+/// per route with `@Transformer`, so the hint says where it goes instead.
+fn create_transformer(name: &str, check: bool) -> std::io::Result<()> {
+    let lower = name.to_lowercase();
+    let file = Path::new("src/transformers").join(format!("{lower}.transformer.ts"));
+    let symbol = format!("{}Transformer", token(name));
+    write_new(&file, transformer_stub(&symbol))?;
+    println!("✓ {}", file.display());
+    println!(
+        "→ attach it to a route: @Transformer({symbol}), imported from './transformers/{lower}.transformer'"
+    );
+    maybe_check(check)
+}
+
+fn transformer_stub(symbol: &str) -> String {
+    format!(
+        "import type {{ TransformerFn }} from '@green-tea/core';\n\n\
+/**\n * Turns what a handler returns into the response. Attach it to a route with\n\
+ * `@Transformer({symbol})`; routes without one use the default JSON transformer.\n\
+ * Set the status and headers here (`set-cookie` takes an array, one header per cookie).\n */\n\
+export const {symbol}: TransformerFn = (value) => ({{\n\
+  status: 200,\n\
+  headers: {{ 'content-type': 'application/json' }},\n\
+  body: JSON.stringify(value),\n\
+}});\n"
+    )
 }
 
 pub(crate) fn maybe_check(check: bool) -> std::io::Result<()> {

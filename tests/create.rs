@@ -170,3 +170,29 @@ fn create_does_not_overwrite_an_existing_file() {
         .stderr(predicates::str::contains("already exists"));
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "// edited\n");
 }
+
+#[test]
+fn create_transformer_writes_a_typed_function_and_says_where_it_goes() {
+    let d = tempdir().unwrap();
+    seed_module(d.path());
+    create(d.path(), "transformer", "csv-export")
+        .success()
+        .stdout(predicates::str::contains(
+            "@Transformer(csvExportTransformer)",
+        ));
+    let file = std::fs::read_to_string(d.path().join("src/transformers/csvexport.transformer.ts"))
+        .unwrap();
+    assert!(
+        file.contains("import type { TransformerFn } from '@green-tea/core'"),
+        "{file}"
+    );
+    assert!(
+        file.contains("export const csvExportTransformer: TransformerFn"),
+        "{file}"
+    );
+    let module = std::fs::read_to_string(d.path().join("src/app.module.ts")).unwrap();
+    assert!(
+        !module.contains("Transformer"),
+        "a transformer is not a module member:\n{module}"
+    );
+}

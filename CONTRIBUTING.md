@@ -126,7 +126,7 @@ scripts/starter-smoke.sh <the runtime you touched>
 ```
 
 CI runs the smoke for all four runtimes on a matrix, plus a weekly `core-freshness` job
-that fails when `CORE_VERSION` in `src/template.rs` falls behind core's `beta` dist-tag.
+that fails when `CORE_VERSION` in `src/template.rs` falls behind core's `latest` dist-tag.
 
 **Non-trivial logic leaves a check behind.** Not a suite — the smallest thing that fails if
 the logic breaks. A generator gets a test that the generated code carries what it must; a

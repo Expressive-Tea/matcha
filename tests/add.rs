@@ -199,3 +199,37 @@ fn add_rejects_a_controller_path_that_does_not_exist() {
         .failure()
         .stderr(predicates::str::contains("no such controller"));
 }
+
+#[test]
+fn add_cookie_reads_with_the_decorator_and_writes_through_a_transformer() {
+    let d = tempdir().unwrap();
+    std::fs::create_dir_all(d.path().join("src/controllers")).unwrap();
+    std::fs::write(
+        d.path().join("src/controllers/home.controller.ts"),
+        "import { Route, Get } from '@green-tea/core';\n\n\
+@Route('/')\nexport class HomeController {\n  @Get('/')\n  home() {}\n}\n",
+    )
+    .unwrap();
+    for _ in 0..2 {
+        Command::cargo_bin("matcha")
+            .unwrap()
+            .current_dir(d.path())
+            .args(["add", "cookie"])
+            .assert()
+            .success();
+    }
+    let out = std::fs::read_to_string(d.path().join("src/controllers/home.controller.ts")).unwrap();
+    assert!(out.contains("@cookie('theme')"), "{out}");
+    assert!(out.contains("'set-cookie': setCookie("), "{out}");
+    for symbol in ["Post", "Transformer", "body", "cookie", "setCookie"] {
+        assert!(
+            out.contains(&format!("{symbol},")) || out.contains(&format!("{symbol} }}")),
+            "{symbol} not imported:\n{out}"
+        );
+    }
+    assert_eq!(
+        out.matches("@Post('/prefs')").count(),
+        1,
+        "not idempotent:\n{out}"
+    );
+}
