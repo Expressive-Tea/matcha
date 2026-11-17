@@ -81,7 +81,8 @@ jobs:
   # checks both halves that matter: a good archive installs, and a bad checksum
   # aborts without leaving a binary behind.
   installer:
-    runs-on: ${{ matrix.os }}
+    # macos-14 is retired on GitHub but is the self-hosted runner's label on Gitea; see release.yml.
+    runs-on: ${{ matrix.os == 'macos-14' && github.server_url == 'https://github.com' && 'macos-15' || matrix.os }}
     strategy:
       fail-fast: false
       matrix:

@@ -48,7 +48,9 @@ jobs:
             os: ubuntu-latest
           - target: aarch64-unknown-linux-musl
             os: ubuntu-latest
-    runs-on: ${{ matrix.os }}
+    # GitHub retired the macos-14 image (jobs are cancelled with "configuration not supported");
+    # on Gitea, macos-14 is the label of the self-hosted macOS runner, so only GitHub moves.
+    runs-on: ${{ matrix.os == 'macos-14' && github.server_url == 'https://github.com' && 'macos-15' || matrix.os }}
     steps:
       - uses: actions/checkout@v5
 
