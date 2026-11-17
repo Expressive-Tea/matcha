@@ -65,13 +65,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Compare the scaffold pin against the beta dist-tag
+      - name: Compare the scaffold pin against the latest dist-tag
         run: |
           pinned=$(grep -oP 'CORE_VERSION: &str = "\K[^"]+' src/template.rs)
-          latest=$(npm view @green-tea/core dist-tags.beta)
+          latest=$(npm view @green-tea/core dist-tags.latest)
           echo "pinned=$pinned latest=$latest"
           if [ "$pinned" != "$latest" ]; then
-            echo "::error::matcha scaffolds @green-tea/core@$pinned but the beta tag is $latest."
+            echo "::error::matcha scaffolds @green-tea/core@$pinned but the latest tag is $latest."
             echo "Bump CORE_VERSION in src/template.rs and let the starter job prove it still boots."
             exit 1
           fi

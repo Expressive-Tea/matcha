@@ -70,7 +70,7 @@ prerelease-only, and npm's semver excludes a prerelease from any range whose
 comparators carry a different `major.minor.patch` — so `^26.7.0-beta.0` never
 resolves past `26.7.0-beta.0` however many betas ship after it. CI scaffolds,
 installs, boots and introspects a real starter on every runtime, and a weekly
-job fails when the pin falls behind the `beta` dist-tag.
+job fails when the pin falls behind the `latest` dist-tag.
 
 ### Introspection
 
@@ -194,11 +194,7 @@ which boots real workerd locally.
 
 Two differences the edge cannot hide. `@Html('file')`, `static` and multipart
 uploads need a filesystem workerd does not have, and shutdown teardown never
-runs — an isolate is discarded, not closed. And core is installed from **JSR**
-here rather than npm: the npm ESM build carries a `createRequire(import.meta.url)`
-banner that throws at load on workerd. The scaffolded `.npmrc` says so and links
-[the issue](https://github.com/Expressive-Tea/green-tea/issues/93); both it and
-the alias can go once that is fixed.
+runs — an isolate is discarded, not closed.
 
 ## Development
 

@@ -13,8 +13,8 @@ use crate::runtime::Runtime;
 /// pin to the oldest matching prerelease that nothing can move off. When core
 /// reaches a stable major this becomes a range (`^27`) and the exactness stops
 /// mattering; until then the `core-freshness` CI job fails when this falls
-/// behind the `beta` dist-tag, which is what keeps it current.
-pub const CORE_VERSION: &str = "26.9.0-beta.2";
+/// behind the `latest` dist-tag, which is what keeps it current.
+pub const CORE_VERSION: &str = "26.11.0-rc.1";
 
 pub static SHARED: Dir = include_dir!("$CARGO_MANIFEST_DIR/template/shared");
 pub static RUNTIME_DENO: Dir = include_dir!("$CARGO_MANIFEST_DIR/template/runtimes/deno");
