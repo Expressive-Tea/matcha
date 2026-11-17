@@ -5,11 +5,13 @@ All notable changes to `matcha-cli` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 matcha uses calendar versioning: `YY.M.PATCH` — the month is not zero-padded, matching
-green-tea's convention. **The CLI ships on its own version line**: `matcha` 26.8 does not
-mean `@green-tea/core` 26.8, and the two release independently. The core version a scaffold
+green-tea's convention. **From 26.11.0-rc.1 matcha releases with core**: `matcha` X scaffolds
+`@green-tea/core` X. Before that the CLI ran on its own version line. The core version a scaffold
 is pinned to is `CORE_VERSION` in `src/template.rs`, and each entry below says when it moved.
 
 ## [Unreleased]
+
+## [26.11.0-rc.1] - 2026-11-17
 
 ### Added
 
@@ -36,6 +38,13 @@ is pinned to is `CORE_VERSION` in `src/template.rs`, and each entry below says w
 
 ### Changed
 
+- **Scaffolds pin `@green-tea/core` 26.11.0-rc.1**, the API-freeze release candidate, and matcha's own
+  version now matches it.
+- **The edge starter installs core from npm.** core#93 is fixed in RC.1, so the `.npmrc` and the
+  `npm:@jsr/green-tea__core` alias are gone. `matcha doctor` still reads the alias, so edge projects
+  scaffolded before this keep working.
+- The weekly `core-freshness` CI job compares `CORE_VERSION` against core's `latest` dist-tag, where
+  release candidates and the stable release publish. `beta` stays on 26.9.0-beta.2.
 - Introspection runs through one query layer (`src/introspect.rs`): every command asks one
   question and gets one JSON document back, then renders it as text unless `--json` is passed.
   Text output is unchanged. The layer is also the seam a future `matcha mcp` would serve over
@@ -255,6 +264,9 @@ First tagged release. A single native binary, no JS runtime needed to install it
 - **A `curl | sh` installer** with sha256 verification, and cross-platform binaries attached
   to each release.
 
+[Unreleased]: https://github.com/Expressive-Tea/matcha/compare/v26.11.0-rc.1...HEAD
+[26.11.0-rc.1]: https://github.com/Expressive-Tea/matcha/compare/v26.9.0-beta.1...v26.11.0-rc.1
+[26.9.0-beta.1]: https://github.com/Expressive-Tea/matcha/compare/v26.9.0-beta.0...v26.9.0-beta.1
 [26.9.0-beta.0]: https://github.com/Expressive-Tea/matcha/compare/v26.8.0-beta.0...v26.9.0-beta.0
 [26.8.0-beta.0]: https://github.com/Expressive-Tea/matcha/compare/v26.7.0...v26.8.0-beta.0
 [26.7.0]: https://github.com/Expressive-Tea/matcha/releases/tag/v26.7.0
