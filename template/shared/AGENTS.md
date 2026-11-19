@@ -38,8 +38,9 @@ matcha graph --format json        # the whole graph
 - `src/app.ts` builds and exports `app` (`createApp({ modules: [...] })`). Introspection and tests import it.
 - `src/main.ts` serves `app`. It is the only file that differs per runtime.
 - `src/app.module.ts` lists the providers, steps and controllers with `@Module`.
-- `matcha create controller|step|provider|module <Name>` generates a piece and wires it into the module.
-- `matcha add sse|ws|upload|stream|buffer` adds a capability to a controller.
+- `matcha create controller|step|provider|module|transformer <Name>` generates a piece and wires it into the module.
+- `matcha create plugin` scaffolds a plugin, in-app or (`--package`) as its own package.
+- `matcha add sse|stream|buffer|ws|upload|cookie` adds a capability to a controller.
 
 ## Check your work
 
@@ -54,5 +55,8 @@ itself:
 
 - npm / Bun: `node_modules/@green-tea/core/llms.txt`
 - Deno (JSR): `https://jsr.io/@green-tea/core/{{core_version}}/llms.txt`
+
+Official plugins (`@green-tea/jwt`, `@green-tea/metrics`, `@green-tea/rate-limit`, ...) ship no llms.txt;
+read the installed one's `node_modules/@green-tea/<name>/README.md`.
 
 The complete docs as one file: https://green-tea.expressive-tea.io/docs/llms-full.txt
