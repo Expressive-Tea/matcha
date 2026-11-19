@@ -11,6 +11,12 @@ cargo install matcha-cli
 Builds from [crates.io](https://crates.io/crates/matcha-cli) and installs the `matcha`
 binary. Needs a Rust toolchain; takes a few seconds.
 
+**Homebrew** (macOS, Linux):
+
+```bash
+brew install expressive-tea/tap/matcha
+```
+
 **Prebuilt binary** (no Rust), from the latest GitHub release:
 
 ```bash
