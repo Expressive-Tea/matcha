@@ -8,7 +8,7 @@
 # project the current `@green-tea/core` will run — which is exactly how the
 # templates sat two core releases behind for two months without a red build.
 #
-# Usage: scripts/starter-smoke.sh <node|deno|bun>
+# Usage: scripts/starter-smoke.sh <node|deno|bun|edge>
 set -euo pipefail
 
 RUNTIME="${1:?usage: starter-smoke.sh <node|deno|bun|edge>}"
@@ -30,8 +30,17 @@ PORT="${PORT:-$((20000 + RANDOM % 20000))}"
 
 WORK="$(mktemp -d)"
 SERVER=""
+# `matcha run` is started in its own process group (set -m below) so the whole tree dies
+# together. `pkill -P` reached only direct children: on edge, wrangler's workerd is a
+# grandchild, kept writing demo/.wrangler, and `rm -rf` failed with "Directory not empty".
+stop_server() {
+  [ -n "$SERVER" ] || return 0
+  kill -- -"$SERVER" 2>/dev/null || true
+  wait "$SERVER" 2>/dev/null || true
+  SERVER=""
+}
 cleanup() {
-  [ -n "$SERVER" ] && { pkill -P "$SERVER" 2>/dev/null || true; kill "$SERVER" 2>/dev/null || true; }
+  stop_server
   rm -rf "$WORK"
 }
 trap cleanup EXIT
@@ -55,8 +64,10 @@ echo "▸ ${CHECK[*]}"
 "${CHECK[@]}"
 
 echo "▸ matcha run (boot on :$PORT)"
+set -m
 "$MATCHA" run >"$WORK/server.log" 2>&1 &
 SERVER=$!
+set +m
 for _ in $(seq 1 60); do
   curl -fsS -o /dev/null "http://localhost:$PORT/" 2>/dev/null && break
   sleep 1
@@ -78,7 +89,7 @@ case "$zen" in
 esac
 echo "✓ serves / and streams /zen"
 
-pkill -P "$SERVER" 2>/dev/null || true; kill "$SERVER" 2>/dev/null || true; SERVER=""
+stop_server
 
 # Introspection runs against the same project, so it also proves the entry file
 # the templates scaffold still exports the `app` that graph/explain import.
