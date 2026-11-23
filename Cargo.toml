@@ -1,6 +1,6 @@
 [package]
 name = "matcha-cli"
-version = "26.11.0-rc.1"
+version = "26.11.0-rc.2"
 edition = "2021"
 description = "The green-tea CLI: scaffold a project, generate controllers, steps and providers already wired into their module, and run with your runtime detected. One native binary, no JS runtime needed to install it."
 license = "MIT"

@@ -11,6 +11,17 @@ is pinned to is `CORE_VERSION` in `src/template.rs`, and each entry below says w
 
 ## [Unreleased]
 
+## [26.11.0-rc.2] - 2026-11-23
+
+### Changed
+
+- **New projects scaffold `@green-tea/core` 26.11.0-rc.2** (`CORE_VERSION`). That core release fixes
+  nine security advisories reported against 26.11.0-rc.1. Projects already scaffolded should run
+  `npm install @green-tea/core@26.11.0-rc.2` or the equivalent for their runtime.
+- The scaffolded `AGENTS.md` lists every generator: `matcha add cookie`, `matcha create transformer`
+  and `matcha create plugin` were missing. It also points agents at the official plugins' READMEs.
+- The README documents installing with Homebrew: `brew install expressive-tea/tap/matcha`.
+
 ## [26.11.0-rc.1] - 2026-11-17
 
 ### Added
@@ -264,7 +275,8 @@ First tagged release. A single native binary, no JS runtime needed to install it
 - **A `curl | sh` installer** with sha256 verification, and cross-platform binaries attached
   to each release.
 
-[Unreleased]: https://github.com/Expressive-Tea/matcha/compare/v26.11.0-rc.1...HEAD
+[Unreleased]: https://github.com/Expressive-Tea/matcha/compare/v26.11.0-rc.2...HEAD
+[26.11.0-rc.2]: https://github.com/Expressive-Tea/matcha/compare/v26.11.0-rc.1...v26.11.0-rc.2
 [26.11.0-rc.1]: https://github.com/Expressive-Tea/matcha/compare/v26.9.0-beta.1...v26.11.0-rc.1
 [26.9.0-beta.1]: https://github.com/Expressive-Tea/matcha/compare/v26.9.0-beta.0...v26.9.0-beta.1
 [26.9.0-beta.0]: https://github.com/Expressive-Tea/matcha/compare/v26.8.0-beta.0...v26.9.0-beta.0
