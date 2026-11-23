@@ -14,7 +14,7 @@ use crate::runtime::Runtime;
 /// reaches a stable major this becomes a range (`^27`) and the exactness stops
 /// mattering; until then the `core-freshness` CI job fails when this falls
 /// behind the `latest` dist-tag, which is what keeps it current.
-pub const CORE_VERSION: &str = "26.11.0-rc.1";
+pub const CORE_VERSION: &str = "26.11.0-rc.2";
 
 pub static SHARED: Dir = include_dir!("$CARGO_MANIFEST_DIR/template/shared");
 pub static RUNTIME_DENO: Dir = include_dir!("$CARGO_MANIFEST_DIR/template/runtimes/deno");
